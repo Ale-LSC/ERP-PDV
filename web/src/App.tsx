@@ -135,7 +135,8 @@ type AppSection =
   | "stock"
   | "customers"
   | "finance"
-  | "purchases";
+  | "purchases"
+  | "team";
 function defaultSectionForRole(role?: string): AppSection {
   if (role === "cashier") return "pdv";
   if (role === "stock") return "stock";
@@ -250,6 +251,14 @@ function App() {
               onClick={() => setSection("dashboard")}
             >
               Visão geral
+            </button>
+          )}
+          {fullAccess && (
+            <button
+              className={section === "team" ? "active" : ""}
+              onClick={() => setSection("team")}
+            >
+              Equipe
             </button>
           )}
           {(fullAccess || role === "cashier") && (
@@ -398,6 +407,8 @@ function App() {
               loadCustomers(token, companyId, setCustomers, setError)
             }
           />
+        ) : section === "team" ? (
+          <Team token={token} companyId={companyId} />
         ) : section === "finance" ? (
           <Finance key={companyId} token={token} companyId={companyId} />
         ) : (
@@ -413,6 +424,109 @@ function App() {
         )}
       </main>
     </div>
+  );
+}
+
+function Team({ token, companyId }: { token: string; companyId: string }) {
+  const [members, setMembers] = useState<
+    Array<{ id: string; name: string; email: string; role: string }>
+  >([]);
+  const [feedback, setFeedback] = useState("");
+  const load = useCallback(
+    async () =>
+      setMembers(await api(`/companies/${companyId}/members`, {}, token)),
+    [companyId, token],
+  );
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void load().catch((reason: Error) => setFeedback(reason.message));
+  }, [load]);
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    try {
+      await api(
+        `/companies/${companyId}/members`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            email: data.get("email"),
+            role: data.get("role"),
+          }),
+        },
+        token,
+      );
+      form.reset();
+      setFeedback("Acesso atualizado.");
+      await load();
+    } catch (reason) {
+      setFeedback(
+        reason instanceof Error ? reason.message : "Erro ao atualizar equipe.",
+      );
+    }
+  }
+  const labels: Record<string, string> = {
+    owner: "Dono",
+    admin: "Administrador",
+    finance: "Financeiro",
+    stock: "Estoque",
+    cashier: "Operador de PDV",
+  };
+  return (
+    <>
+      <section className="page-title">
+        <div>
+          <small>ACESSOS</small>
+          <h1>Equipe e permissões</h1>
+          <p>Cada usuário acessa somente os módulos da sua função.</p>
+        </div>
+      </section>
+      {feedback && (
+        <div className="alert success">
+          {feedback}
+          <button onClick={() => setFeedback("")}>×</button>
+        </div>
+      )}
+      <section className="panel">
+        <form className="inline-form" onSubmit={(event) => void submit(event)}>
+          <input
+            name="email"
+            type="email"
+            placeholder="E-mail de usuário já cadastrado"
+            required
+          />
+          <select name="role" defaultValue="cashier">
+            <option value="admin">Administrador</option>
+            <option value="finance">Financeiro</option>
+            <option value="stock">Estoque</option>
+            <option value="cashier">Operador de PDV</option>
+            <option value="owner">Dono</option>
+          </select>
+          <button className="primary">Salvar acesso</button>
+        </form>
+      </section>
+      <section className="panel table-panel">
+        <table>
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th>E-mail</th>
+              <th>Função</th>
+            </tr>
+          </thead>
+          <tbody>
+            {members.map((member) => (
+              <tr key={member.id}>
+                <td>{member.name}</td>
+                <td>{member.email}</td>
+                <td>{labels[member.role] ?? member.role}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+    </>
   );
 }
 
