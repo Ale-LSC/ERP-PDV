@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -21,20 +22,23 @@ export class ReplenishmentController {
     @Param('companyId', ParseUUIDPipe) companyId: string,
     @Req() req: AuthenticatedRequest,
     @Body() dto: CreateReplenishmentDto,
+    @Headers('x-branch-id') branchId?: string,
   ) {
-    return this.service.create(companyId, req.user.sub, dto);
+    return this.service.create(companyId, req.user.sub, dto, branchId);
   }
   @Get() all(
     @Param('companyId', ParseUUIDPipe) companyId: string,
     @Req() req: AuthenticatedRequest,
+    @Headers('x-branch-id') branchId?: string,
   ) {
-    return this.service.findAll(companyId, req.user.sub);
+    return this.service.findAll(companyId, req.user.sub, branchId);
   }
   @Patch(':id/fulfill') fulfill(
     @Param('companyId', ParseUUIDPipe) companyId: string,
     @Param('id', ParseUUIDPipe) id: string,
     @Req() req: AuthenticatedRequest,
+    @Headers('x-branch-id') branchId?: string,
   ) {
-    return this.service.fulfill(companyId, id, req.user.sub);
+    return this.service.fulfill(companyId, id, req.user.sub, branchId);
   }
 }

@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   Param,
   ParseUUIDPipe,
   Post,
@@ -23,15 +24,22 @@ export class StockController {
     @Param('companyId', ParseUUIDPipe) companyId: string,
     @Req() request: AuthenticatedRequest,
     @Body() dto: CreateStockMovementDto,
+    @Headers('x-branch-id') branchId?: string,
   ) {
-    return this.stockService.createMovement(companyId, request.user.sub, dto);
+    return this.stockService.createMovement(
+      companyId,
+      request.user.sub,
+      dto,
+      branchId,
+    );
   }
 
   @Get()
   findAll(
     @Param('companyId', ParseUUIDPipe) companyId: string,
     @Req() request: AuthenticatedRequest,
+    @Headers('x-branch-id') branchId?: string,
   ) {
-    return this.stockService.findAll(companyId, request.user.sub);
+    return this.stockService.findAll(companyId, request.user.sub, branchId);
   }
 }

@@ -8,20 +8,36 @@ import { CompaniesService } from '../companies/companies.service';
 import { db } from '../database/drizzle';
 import { products } from '../database/schema/products.schema';
 import { stockMovements } from '../database/schema/stock.schema';
+import { branchStocks } from '../database/schema/stock.schema';
+import { BranchesService } from '../branches/branches.service';
+import { sql } from 'drizzle-orm';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { generateProductSku } from './product-sku';
 
 @Injectable()
 export class ProductsService {
-  constructor(private readonly companiesService: CompaniesService) {}
+  constructor(
+    private readonly companiesService: CompaniesService,
+    private readonly branchesService: BranchesService,
+  ) {}
 
-  async create(companyId: string, userId: string, dto: CreateProductDto) {
+  async create(
+    companyId: string,
+    userId: string,
+    dto: CreateProductDto,
+    requestedBranchId?: string,
+  ) {
     await this.companiesService.assertRole(companyId, userId, [
       'owner',
       'admin',
       'stock',
     ]);
+    const branchId = await this.branchesService.resolve(
+      companyId,
+      userId,
+      requestedBranchId,
+    );
     const sku = await this.generateUniqueSku(companyId, dto.name);
 
     try {
@@ -41,8 +57,14 @@ export class ProductsService {
           .returning();
 
         if (dto.stockQuantity > 0) {
+          await tx.insert(branchStocks).values({
+            branchId,
+            productId: product.id,
+            quantity: dto.stockQuantity.toFixed(3),
+          });
           await tx.insert(stockMovements).values({
             companyId,
+            branchId,
             productId: product.id,
             type: 'adjustment',
             quantity: dto.stockQuantity.toFixed(3),
@@ -69,12 +91,37 @@ export class ProductsService {
     }
   }
 
-  async findAll(companyId: string, userId: string) {
+  async findAll(companyId: string, userId: string, requestedBranchId?: string) {
     await this.companiesService.assertRole(companyId, userId);
 
+    const branchId = await this.branchesService.resolve(
+      companyId,
+      userId,
+      requestedBranchId,
+    );
     return db
-      .select()
+      .select({
+        id: products.id,
+        companyId: products.companyId,
+        name: products.name,
+        sku: products.sku,
+        barcode: products.barcode,
+        salePrice: products.salePrice,
+        costPrice: products.costPrice,
+        stockQuantity: sql<string>`coalesce(${branchStocks.quantity}, 0)`,
+        minimumStock: products.minimumStock,
+        isActive: products.isActive,
+        createdAt: products.createdAt,
+        updatedAt: products.updatedAt,
+      })
       .from(products)
+      .leftJoin(
+        branchStocks,
+        and(
+          eq(branchStocks.productId, products.id),
+          eq(branchStocks.branchId, branchId),
+        ),
+      )
       .where(
         and(eq(products.companyId, companyId), eq(products.isActive, true)),
       )
@@ -87,12 +134,18 @@ export class ProductsService {
     productId: string,
     userId: string,
     dto: UpdateProductDto,
+    requestedBranchId?: string,
   ) {
     await this.companiesService.assertRole(companyId, userId, [
       'owner',
       'admin',
       'stock',
     ]);
+    const branchId = await this.branchesService.resolve(
+      companyId,
+      userId,
+      requestedBranchId,
+    );
 
     try {
       return db.transaction(async (tx) => {
@@ -125,9 +178,6 @@ export class ProductsService {
         if (dto.minimumStock !== undefined) {
           changes.minimumStock = dto.minimumStock.toFixed(3);
         }
-        if (dto.stockQuantity !== undefined) {
-          changes.stockQuantity = dto.stockQuantity.toFixed(3);
-        }
         if (dto.isActive !== undefined) changes.isActive = dto.isActive;
 
         const [product] = await tx
@@ -136,13 +186,39 @@ export class ProductsService {
           .where(eq(products.id, productId))
           .returning();
 
-        const previousStock = Number(existingProduct.stockQuantity);
+        const [branchStock] = await tx
+          .select()
+          .from(branchStocks)
+          .where(
+            and(
+              eq(branchStocks.branchId, branchId),
+              eq(branchStocks.productId, productId),
+            ),
+          )
+          .for('update');
+        const previousStock = Number(branchStock?.quantity ?? 0);
         if (
           dto.stockQuantity !== undefined &&
           dto.stockQuantity !== previousStock
         ) {
+          await tx
+            .insert(branchStocks)
+            .values({
+              branchId,
+              productId,
+              quantity: dto.stockQuantity.toFixed(3),
+              updatedAt: new Date(),
+            })
+            .onConflictDoUpdate({
+              target: [branchStocks.branchId, branchStocks.productId],
+              set: {
+                quantity: dto.stockQuantity.toFixed(3),
+                updatedAt: new Date(),
+              },
+            });
           await tx.insert(stockMovements).values({
             companyId,
+            branchId,
             productId,
             type: 'adjustment',
             quantity: dto.stockQuantity.toFixed(3),

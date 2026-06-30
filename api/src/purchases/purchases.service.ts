@@ -10,20 +10,34 @@ import { db } from '../database/drizzle';
 import { financialEntries } from '../database/schema/finance.schema';
 import { products } from '../database/schema/products.schema';
 import { purchaseItems, purchases } from '../database/schema/purchases.schema';
-import { stockMovements } from '../database/schema/stock.schema';
+import { branchStocks, stockMovements } from '../database/schema/stock.schema';
+import { BranchesService } from '../branches/branches.service';
 import { suppliers } from '../database/schema/suppliers.schema';
 import { CreatePurchaseDto } from './dto/create-purchase.dto';
 import { calculatePurchaseTotal } from './purchase-calculation';
 
 @Injectable()
 export class PurchasesService {
-  constructor(private readonly companiesService: CompaniesService) {}
-  async create(companyId: string, userId: string, dto: CreatePurchaseDto) {
+  constructor(
+    private readonly companiesService: CompaniesService,
+    private readonly branchesService: BranchesService,
+  ) {}
+  async create(
+    companyId: string,
+    userId: string,
+    dto: CreatePurchaseDto,
+    requestedBranchId?: string,
+  ) {
     await this.companiesService.assertRole(companyId, userId, [
       'owner',
       'admin',
       'stock',
     ]);
+    const branchId = await this.branchesService.resolve(
+      companyId,
+      userId,
+      requestedBranchId,
+    );
     return db.transaction(async (tx) => {
       const [supplier] = await tx
         .select()
@@ -84,6 +98,7 @@ export class PurchasesService {
         .insert(purchases)
         .values({
           companyId,
+          branchId,
           supplierId: supplier.id,
           financialEntryId,
           invoiceNumber: dto.invoiceNumber?.trim() || null,
@@ -94,7 +109,17 @@ export class PurchasesService {
         .returning();
       for (const product of selected) {
         const item = consolidated.get(product.id)!;
-        const previous = Number(product.stockQuantity);
+        const [currentStock] = await tx
+          .select()
+          .from(branchStocks)
+          .where(
+            and(
+              eq(branchStocks.branchId, branchId),
+              eq(branchStocks.productId, product.id),
+            ),
+          )
+          .for('update');
+        const previous = Number(currentStock?.quantity ?? 0);
         const resulting = previous + item.quantity;
         await tx.insert(purchaseItems).values({
           purchaseId: purchase.id,
@@ -107,15 +132,24 @@ export class PurchasesService {
           ).toFixed(2),
         });
         await tx
-          .update(products)
-          .set({
-            stockQuantity: resulting.toFixed(3),
-            costPrice: item.unitCost.toFixed(2),
+          .insert(branchStocks)
+          .values({
+            branchId,
+            productId: product.id,
+            quantity: resulting.toFixed(3),
             updatedAt: new Date(),
           })
+          .onConflictDoUpdate({
+            target: [branchStocks.branchId, branchStocks.productId],
+            set: { quantity: resulting.toFixed(3), updatedAt: new Date() },
+          });
+        await tx
+          .update(products)
+          .set({ costPrice: item.unitCost.toFixed(2), updatedAt: new Date() })
           .where(eq(products.id, product.id));
         await tx.insert(stockMovements).values({
           companyId,
+          branchId,
           productId: product.id,
           type: 'in',
           quantity: item.quantity.toFixed(3),
@@ -128,12 +162,17 @@ export class PurchasesService {
       return purchase;
     });
   }
-  async findAll(companyId: string, userId: string) {
+  async findAll(companyId: string, userId: string, requestedBranchId?: string) {
     await this.companiesService.assertRole(companyId, userId, [
       'owner',
       'admin',
       'stock',
     ]);
+    const branchId = await this.branchesService.resolve(
+      companyId,
+      userId,
+      requestedBranchId,
+    );
     return db
       .select({
         id: purchases.id,
@@ -147,22 +186,41 @@ export class PurchasesService {
       })
       .from(purchases)
       .innerJoin(suppliers, eq(purchases.supplierId, suppliers.id))
-      .where(eq(purchases.companyId, companyId))
+      .where(
+        and(
+          eq(purchases.companyId, companyId),
+          eq(purchases.branchId, branchId),
+        ),
+      )
       .orderBy(desc(purchases.createdAt))
       .limit(100);
   }
-  async cancel(companyId: string, purchaseId: string, userId: string) {
+  async cancel(
+    companyId: string,
+    purchaseId: string,
+    userId: string,
+    requestedBranchId?: string,
+  ) {
     await this.companiesService.assertRole(companyId, userId, [
       'owner',
       'admin',
       'stock',
     ]);
+    const branchId = await this.branchesService.resolve(
+      companyId,
+      userId,
+      requestedBranchId,
+    );
     return db.transaction(async (tx) => {
       const [purchase] = await tx
         .select()
         .from(purchases)
         .where(
-          and(eq(purchases.id, purchaseId), eq(purchases.companyId, companyId)),
+          and(
+            eq(purchases.id, purchaseId),
+            eq(purchases.companyId, companyId),
+            eq(purchases.branchId, branchId),
+          ),
         )
         .for('update');
       if (!purchase) throw new NotFoundException('Compra não encontrada');
@@ -183,7 +241,17 @@ export class PurchasesService {
         const product = byId.get(item.productId);
         if (!product)
           throw new NotFoundException('Produto da compra não encontrado');
-        const previous = Number(product.stockQuantity);
+        const [currentStock] = await tx
+          .select()
+          .from(branchStocks)
+          .where(
+            and(
+              eq(branchStocks.branchId, purchase.branchId),
+              eq(branchStocks.productId, product.id),
+            ),
+          )
+          .for('update');
+        const previous = Number(currentStock?.quantity ?? 0);
         const quantity = Number(item.quantity);
         if (previous < quantity)
           throw new BadRequestException(
@@ -191,11 +259,17 @@ export class PurchasesService {
           );
         const resulting = previous - quantity;
         await tx
-          .update(products)
-          .set({ stockQuantity: resulting.toFixed(3), updatedAt: new Date() })
-          .where(eq(products.id, product.id));
+          .update(branchStocks)
+          .set({ quantity: resulting.toFixed(3), updatedAt: new Date() })
+          .where(
+            and(
+              eq(branchStocks.branchId, purchase.branchId),
+              eq(branchStocks.productId, product.id),
+            ),
+          );
         await tx.insert(stockMovements).values({
           companyId,
+          branchId: purchase.branchId,
           productId: product.id,
           type: 'out',
           quantity: quantity.toFixed(3),

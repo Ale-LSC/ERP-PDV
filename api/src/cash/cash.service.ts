@@ -9,23 +9,38 @@ import { CompaniesService } from '../companies/companies.service';
 import { db } from '../database/drizzle';
 import { cashSessions } from '../database/schema/cash.schema';
 import { salePayments, sales } from '../database/schema/sales.schema';
+import { BranchesService } from '../branches/branches.service';
 
 @Injectable()
 export class CashService {
-  constructor(private readonly companiesService: CompaniesService) {}
+  constructor(
+    private readonly companiesService: CompaniesService,
+    private readonly branchesService: BranchesService,
+  ) {}
 
-  async open(companyId: string, userId: string, openingAmount: number) {
+  async open(
+    companyId: string,
+    userId: string,
+    openingAmount: number,
+    requestedBranchId?: string,
+  ) {
     await this.companiesService.assertRole(companyId, userId, [
       'owner',
       'admin',
       'cashier',
     ]);
+    const branchId = await this.branchesService.resolve(
+      companyId,
+      userId,
+      requestedBranchId,
+    );
 
     try {
       const [session] = await db
         .insert(cashSessions)
         .values({
           companyId,
+          branchId,
           openedBy: userId,
           openingAmount: openingAmount.toFixed(2),
         })
@@ -46,12 +61,21 @@ export class CashService {
     }
   }
 
-  async findCurrent(companyId: string, userId: string) {
+  async findCurrent(
+    companyId: string,
+    userId: string,
+    requestedBranchId?: string,
+  ) {
     await this.companiesService.assertRole(companyId, userId, [
       'owner',
       'admin',
       'cashier',
     ]);
+    const branchId = await this.branchesService.resolve(
+      companyId,
+      userId,
+      requestedBranchId,
+    );
 
     const [session] = await db
       .select()
@@ -59,6 +83,7 @@ export class CashService {
       .where(
         and(
           eq(cashSessions.companyId, companyId),
+          eq(cashSessions.branchId, branchId),
           eq(cashSessions.openedBy, userId),
           eq(cashSessions.status, 'open'),
         ),

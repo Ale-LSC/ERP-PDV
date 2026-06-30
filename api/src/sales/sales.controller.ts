@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   Param,
   ParseUUIDPipe,
   Post,
@@ -31,8 +32,9 @@ export class SalesController {
   findRecent(
     @Param('companyId', ParseUUIDPipe) companyId: string,
     @Req() request: AuthenticatedRequest,
+    @Headers('x-branch-id') branchId?: string,
   ) {
-    return this.salesService.findRecent(companyId, request.user.sub);
+    return this.salesService.findRecent(companyId, request.user.sub, branchId);
   }
 
   @Get(':saleId')
@@ -40,8 +42,14 @@ export class SalesController {
     @Param('companyId', ParseUUIDPipe) companyId: string,
     @Param('saleId', ParseUUIDPipe) saleId: string,
     @Req() request: AuthenticatedRequest,
+    @Headers('x-branch-id') branchId?: string,
   ) {
-    return this.salesService.findOne(companyId, saleId, request.user.sub);
+    return this.salesService.findOne(
+      companyId,
+      saleId,
+      request.user.sub,
+      branchId,
+    );
   }
 
   @Post(':saleId/cancel')
@@ -49,7 +57,13 @@ export class SalesController {
     @Param('companyId', ParseUUIDPipe) companyId: string,
     @Param('saleId', ParseUUIDPipe) saleId: string,
     @Req() request: AuthenticatedRequest,
+    @Headers('x-branch-id') branchId?: string,
   ) {
-    return this.salesService.cancel(companyId, saleId, request.user.sub);
+    return this.salesService.cancel(
+      companyId,
+      saleId,
+      request.user.sub,
+      branchId,
+    );
   }
 }

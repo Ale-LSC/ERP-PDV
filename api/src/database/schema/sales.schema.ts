@@ -14,6 +14,7 @@ import { companies } from './companies.schema';
 import { products } from './products.schema';
 import { users } from './users.schema';
 import { customers } from './customers.schema';
+import { branches } from './branches.schema';
 
 export const saleStatusEnum = pgEnum('sale_status', ['completed', 'cancelled']);
 export const paymentMethodEnum = pgEnum('payment_method', [
@@ -30,6 +31,9 @@ export const sales = pgTable(
     companyId: uuid('company_id')
       .notNull()
       .references(() => companies.id, { onDelete: 'restrict' }),
+    branchId: uuid('branch_id')
+      .notNull()
+      .references(() => branches.id, { onDelete: 'restrict' }),
     cashSessionId: uuid('cash_session_id')
       .notNull()
       .references(() => cashSessions.id, { onDelete: 'restrict' }),

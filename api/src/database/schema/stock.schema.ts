@@ -12,6 +12,25 @@ import { sql } from 'drizzle-orm';
 import { companies } from './companies.schema';
 import { products } from './products.schema';
 import { users } from './users.schema';
+import { branches } from './branches.schema';
+import { primaryKey } from 'drizzle-orm/pg-core';
+
+export const branchStocks = pgTable(
+  'branch_stocks',
+  {
+    branchId: uuid('branch_id')
+      .notNull()
+      .references(() => branches.id, { onDelete: 'cascade' }),
+    productId: uuid('product_id')
+      .notNull()
+      .references(() => products.id, { onDelete: 'cascade' }),
+    quantity: numeric('quantity', { precision: 14, scale: 3 })
+      .default('0')
+      .notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.branchId, table.productId] })],
+);
 
 export const stockMovementTypeEnum = pgEnum('stock_movement_type', [
   'in',
@@ -26,6 +45,9 @@ export const stockMovements = pgTable(
     companyId: uuid('company_id')
       .notNull()
       .references(() => companies.id, { onDelete: 'cascade' }),
+    branchId: uuid('branch_id')
+      .notNull()
+      .references(() => branches.id, { onDelete: 'restrict' }),
     productId: uuid('product_id')
       .notNull()
       .references(() => products.id, { onDelete: 'restrict' }),

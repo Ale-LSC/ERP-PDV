@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Headers,
   Param,
   ParseUUIDPipe,
   Query,
@@ -22,7 +23,13 @@ export class ReportsController {
     @Param('companyId', ParseUUIDPipe) companyId: string,
     @Req() request: AuthenticatedRequest,
     @Query() period: ReportPeriodDto,
+    @Headers('x-branch-id') branchId?: string,
   ) {
-    return this.reportsService.overview(companyId, request.user.sub, period);
+    return this.reportsService.overview(
+      companyId,
+      request.user.sub,
+      period,
+      branchId,
+    );
   }
 }

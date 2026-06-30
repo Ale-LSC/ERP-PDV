@@ -10,6 +10,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import { companies } from './companies.schema';
 import { users } from './users.schema';
+import { branches } from './branches.schema';
 
 export const cashSessionStatusEnum = pgEnum('cash_session_status', [
   'open',
@@ -23,6 +24,9 @@ export const cashSessions = pgTable(
     companyId: uuid('company_id')
       .notNull()
       .references(() => companies.id, { onDelete: 'cascade' }),
+    branchId: uuid('branch_id')
+      .notNull()
+      .references(() => branches.id, { onDelete: 'restrict' }),
     openedBy: uuid('opened_by')
       .notNull()
       .references(() => users.id, { onDelete: 'restrict' }),
@@ -37,7 +41,7 @@ export const cashSessions = pgTable(
   },
   (table) => [
     uniqueIndex('cash_sessions_operator_open_unique')
-      .on(table.companyId, table.openedBy)
+      .on(table.branchId, table.openedBy)
       .where(sql`${table.status} = 'open'`),
     check(
       'cash_sessions_opening_nonnegative',

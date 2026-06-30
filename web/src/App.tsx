@@ -173,6 +173,9 @@ async function api<T>(path: string, options: RequestInit = {}, token?: string) {
     headers: {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(localStorage.getItem("erp-branch")
+        ? { "X-Branch-Id": localStorage.getItem("erp-branch")! }
+        : {}),
       ...options.headers,
     },
   });
@@ -198,6 +201,8 @@ function App() {
   const [companyId, setCompanyId] = useState("");
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [branchId, setBranchId] = useState("");
   const [section, setSection] = useState<AppSection>("dashboard");
   const [error, setError] = useState("");
 
@@ -214,11 +219,28 @@ function App() {
 
   useEffect(() => {
     if (!token || !companyId) return;
+    void api<Branch[]>(`/companies/${companyId}/branches`, {}, token)
+      .then((items) => {
+        const selected =
+          items.find(
+            (item) => item.id === localStorage.getItem("erp-branch"),
+          ) ??
+          items.find((item) => item.isHeadquarters) ??
+          items[0];
+        setBranches(items);
+        setBranchId(selected?.id ?? "");
+        if (selected) localStorage.setItem("erp-branch", selected.id);
+      })
+      .catch((reason: Error) => setError(reason.message));
+  }, [token, companyId]);
+
+  useEffect(() => {
+    if (!token || !companyId || !branchId) return;
     void Promise.all([
       loadProducts(token, companyId, setProducts, setError),
       loadCustomers(token, companyId, setCustomers, setError),
     ]);
-  }, [token, companyId]);
+  }, [token, companyId, branchId]);
 
   function authenticate(accessToken: string) {
     localStorage.setItem("erp-token", accessToken);
@@ -233,6 +255,9 @@ function App() {
     setCompanyId("");
     setProducts([]);
     setCustomers([]);
+    setBranches([]);
+    setBranchId("");
+    localStorage.removeItem("erp-branch");
   }
 
   if (!token) return <AuthScreen onAuthenticated={authenticate} />;
@@ -333,22 +358,42 @@ function App() {
             <h2>{company?.name ?? "Crie sua empresa"}</h2>
           </div>
           {companies.length > 0 && (
-            <select
-              value={companyId}
-              onChange={(event) => {
-                const nextCompany = companies.find(
-                  (item) => item.id === event.target.value,
-                );
-                setCompanyId(event.target.value);
-                setSection(defaultSectionForRole(nextCompany?.role));
-              }}
-            >
-              {companies.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
+            <div className="company-selectors">
+              <select
+                value={companyId}
+                onChange={(event) => {
+                  const nextCompany = companies.find(
+                    (item) => item.id === event.target.value,
+                  );
+                  setBranchId("");
+                  localStorage.removeItem("erp-branch");
+                  setCompanyId(event.target.value);
+                  setSection(defaultSectionForRole(nextCompany?.role));
+                }}
+              >
+                {companies.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+              {branches.length > 0 && (
+                <select
+                  value={branchId}
+                  onChange={(event) => {
+                    setBranchId(event.target.value);
+                    localStorage.setItem("erp-branch", event.target.value);
+                  }}
+                  aria-label="Filial ativa"
+                >
+                  {branches.map((branch) => (
+                    <option key={branch.id} value={branch.id}>
+                      {branch.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
           )}
         </header>
 

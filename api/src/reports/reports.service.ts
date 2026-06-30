@@ -11,20 +11,36 @@ import {
 } from '../database/schema/sales.schema';
 import { ReportPeriodDto } from './dto/report-period.dto';
 import { resolveReportPeriod } from './report-period';
+import { BranchesService } from '../branches/branches.service';
+import { branchStocks } from '../database/schema/stock.schema';
 
 @Injectable()
 export class ReportsService {
-  constructor(private readonly companiesService: CompaniesService) {}
+  constructor(
+    private readonly companiesService: CompaniesService,
+    private readonly branchesService: BranchesService,
+  ) {}
 
-  async overview(companyId: string, userId: string, period: ReportPeriodDto) {
+  async overview(
+    companyId: string,
+    userId: string,
+    period: ReportPeriodDto,
+    requestedBranchId?: string,
+  ) {
     await this.companiesService.assertRole(companyId, userId, [
       'owner',
       'admin',
       'finance',
     ]);
+    const branchId = await this.branchesService.resolve(
+      companyId,
+      userId,
+      requestedBranchId,
+    );
     const { start, end } = resolveReportPeriod(period.from, period.to);
     const completedSales = and(
       eq(sales.companyId, companyId),
+      eq(sales.branchId, branchId),
       eq(sales.status, 'completed'),
       gte(sales.createdAt, start),
       lte(sales.createdAt, end),
@@ -66,11 +82,18 @@ export class ReportsService {
         db
           .select({
             productsCount: sql<number>`count(*)::int`,
-            lowStockCount: sql<number>`count(*) filter (where ${products.stockQuantity} <= ${products.minimumStock})::int`,
-            stockCost: sql<string>`coalesce(sum(${products.stockQuantity} * ${products.costPrice}), 0)`,
-            stockRetail: sql<string>`coalesce(sum(${products.stockQuantity} * ${products.salePrice}), 0)`,
+            lowStockCount: sql<number>`count(*) filter (where coalesce(${branchStocks.quantity}, 0) <= ${products.minimumStock})::int`,
+            stockCost: sql<string>`coalesce(sum(coalesce(${branchStocks.quantity}, 0) * ${products.costPrice}), 0)`,
+            stockRetail: sql<string>`coalesce(sum(coalesce(${branchStocks.quantity}, 0) * ${products.salePrice}), 0)`,
           })
           .from(products)
+          .leftJoin(
+            branchStocks,
+            and(
+              eq(branchStocks.productId, products.id),
+              eq(branchStocks.branchId, branchId),
+            ),
+          )
           .where(
             and(eq(products.companyId, companyId), eq(products.isActive, true)),
           ),

@@ -10,6 +10,7 @@ import {
 import { companies } from './companies.schema';
 import { products } from './products.schema';
 import { users } from './users.schema';
+import { branches } from './branches.schema';
 export const replenishmentStatusEnum = pgEnum('replenishment_status', [
   'pending',
   'fulfilled',
@@ -22,6 +23,9 @@ export const replenishmentRequests = pgTable(
     companyId: uuid('company_id')
       .notNull()
       .references(() => companies.id, { onDelete: 'cascade' }),
+    branchId: uuid('branch_id')
+      .notNull()
+      .references(() => branches.id, { onDelete: 'restrict' }),
     productId: uuid('product_id')
       .notNull()
       .references(() => products.id, { onDelete: 'restrict' }),

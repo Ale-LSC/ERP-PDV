@@ -15,6 +15,7 @@ import { financialEntries } from './finance.schema';
 import { products } from './products.schema';
 import { suppliers } from './suppliers.schema';
 import { users } from './users.schema';
+import { branches } from './branches.schema';
 
 export const purchaseStatusEnum = pgEnum('purchase_status', [
   'completed',
@@ -27,6 +28,9 @@ export const purchases = pgTable(
     companyId: uuid('company_id')
       .notNull()
       .references(() => companies.id, { onDelete: 'cascade' }),
+    branchId: uuid('branch_id')
+      .notNull()
+      .references(() => branches.id, { onDelete: 'restrict' }),
     supplierId: uuid('supplier_id')
       .notNull()
       .references(() => suppliers.id, { onDelete: 'restrict' }),

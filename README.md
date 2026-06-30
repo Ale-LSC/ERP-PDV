@@ -96,6 +96,14 @@ especializados sem misturar regras de segmentos diferentes.
 O operador do PDV pode solicitar reposição de itens com estoque baixo. A equipe
 de estoque acompanha e marca cada solicitação como atendida.
 
+### Filiais
+
+Cada empresa possui uma matriz e pode cadastrar outras unidades na tela de
+equipe. O catálogo de produtos é compartilhado, enquanto saldo de estoque,
+movimentações, solicitações, compras, caixas e vendas são isolados pela filial
+selecionada no topo da aplicação. Os dados existentes foram preservados na
+matriz durante a migração.
+
 ## Leitor de código de barras
 
 O PDV aceita leitores USB ou Bluetooth configurados no modo teclado. Cadastre o

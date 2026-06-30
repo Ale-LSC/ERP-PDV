@@ -15,8 +15,9 @@ import {
   salePayments,
   sales,
 } from '../database/schema/sales.schema';
-import { stockMovements } from '../database/schema/stock.schema';
+import { branchStocks, stockMovements } from '../database/schema/stock.schema';
 import { CreateSaleDto, PaymentMethod } from './dto/create-sale.dto';
+import { BranchesService } from '../branches/branches.service';
 import {
   calculateChangeCents,
   calculateSaleTotals,
@@ -26,7 +27,10 @@ import {
 
 @Injectable()
 export class SalesService {
-  constructor(private readonly companiesService: CompaniesService) {}
+  constructor(
+    private readonly companiesService: CompaniesService,
+    private readonly branchesService: BranchesService,
+  ) {}
 
   async create(companyId: string, userId: string, dto: CreateSaleDto) {
     await this.companiesService.assertRole(companyId, userId, [
@@ -38,7 +42,7 @@ export class SalesService {
 
     return db.transaction(async (tx) => {
       const [cashSession] = await tx
-        .select({ id: cashSessions.id })
+        .select({ id: cashSessions.id, branchId: cashSessions.branchId })
         .from(cashSessions)
         .where(
           and(
@@ -70,8 +74,21 @@ export class SalesService {
 
       const productIds = consolidatedItems.map((item) => item.productId).sort();
       const selectedProducts = await tx
-        .select()
+        .select({
+          id: products.id,
+          name: products.name,
+          sku: products.sku,
+          salePrice: products.salePrice,
+          stockQuantity: branchStocks.quantity,
+        })
         .from(products)
+        .innerJoin(
+          branchStocks,
+          and(
+            eq(branchStocks.productId, products.id),
+            eq(branchStocks.branchId, cashSession.branchId),
+          ),
+        )
         .where(
           and(
             eq(products.companyId, companyId),
@@ -153,6 +170,7 @@ export class SalesService {
         .insert(sales)
         .values({
           companyId,
+          branchId: cashSession.branchId,
           cashSessionId: cashSession.id,
           operatorId: userId,
           customerId: dto.customerId ?? null,
@@ -185,14 +203,20 @@ export class SalesService {
         const resultingQuantity = previousQuantity - quantity;
 
         await tx
-          .update(products)
+          .update(branchStocks)
           .set({
-            stockQuantity: resultingQuantity.toFixed(3),
+            quantity: resultingQuantity.toFixed(3),
             updatedAt: new Date(),
           })
-          .where(eq(products.id, product.id));
+          .where(
+            and(
+              eq(branchStocks.productId, product.id),
+              eq(branchStocks.branchId, cashSession.branchId),
+            ),
+          );
         await tx.insert(stockMovements).values({
           companyId,
+          branchId: cashSession.branchId,
           productId: product.id,
           type: 'out',
           quantity: quantity.toFixed(3),
@@ -215,17 +239,33 @@ export class SalesService {
     });
   }
 
-  async cancel(companyId: string, saleId: string, userId: string) {
+  async cancel(
+    companyId: string,
+    saleId: string,
+    userId: string,
+    requestedBranchId?: string,
+  ) {
     await this.companiesService.assertRole(companyId, userId, [
       'owner',
       'admin',
     ]);
+    const branchId = await this.branchesService.resolve(
+      companyId,
+      userId,
+      requestedBranchId,
+    );
 
     return db.transaction(async (tx) => {
       const [sale] = await tx
         .select()
         .from(sales)
-        .where(and(eq(sales.id, saleId), eq(sales.companyId, companyId)))
+        .where(
+          and(
+            eq(sales.id, saleId),
+            eq(sales.companyId, companyId),
+            eq(sales.branchId, branchId),
+          ),
+        )
         .for('update');
 
       if (!sale) throw new NotFoundException('Venda não encontrada');
@@ -239,8 +279,19 @@ export class SalesService {
         .where(eq(saleItems.saleId, saleId));
       const productIds = items.map((item) => item.productId).sort();
       const selectedProducts = await tx
-        .select()
+        .select({
+          id: products.id,
+          name: products.name,
+          stockQuantity: branchStocks.quantity,
+        })
         .from(products)
+        .innerJoin(
+          branchStocks,
+          and(
+            eq(branchStocks.productId, products.id),
+            eq(branchStocks.branchId, sale.branchId),
+          ),
+        )
         .where(inArray(products.id, productIds))
         .orderBy(products.id)
         .for('update');
@@ -258,14 +309,20 @@ export class SalesService {
         const resultingQuantity = previousQuantity + quantity;
 
         await tx
-          .update(products)
+          .update(branchStocks)
           .set({
-            stockQuantity: resultingQuantity.toFixed(3),
+            quantity: resultingQuantity.toFixed(3),
             updatedAt: new Date(),
           })
-          .where(eq(products.id, product.id));
+          .where(
+            and(
+              eq(branchStocks.productId, product.id),
+              eq(branchStocks.branchId, sale.branchId),
+            ),
+          );
         await tx.insert(stockMovements).values({
           companyId,
+          branchId: sale.branchId,
           productId: product.id,
           type: 'in',
           quantity: quantity.toFixed(3),
@@ -290,27 +347,46 @@ export class SalesService {
     });
   }
 
-  async findRecent(companyId: string, userId: string) {
+  async findRecent(
+    companyId: string,
+    userId: string,
+    requestedBranchId?: string,
+  ) {
     await this.companiesService.assertRole(companyId, userId, [
       'owner',
       'admin',
       'cashier',
     ]);
+    const branchId = await this.branchesService.resolve(
+      companyId,
+      userId,
+      requestedBranchId,
+    );
 
     return db
       .select()
       .from(sales)
-      .where(eq(sales.companyId, companyId))
+      .where(and(eq(sales.companyId, companyId), eq(sales.branchId, branchId)))
       .orderBy(desc(sales.createdAt))
       .limit(50);
   }
 
-  async findOne(companyId: string, saleId: string, userId: string) {
+  async findOne(
+    companyId: string,
+    saleId: string,
+    userId: string,
+    requestedBranchId?: string,
+  ) {
     await this.companiesService.assertRole(companyId, userId, [
       'owner',
       'admin',
       'cashier',
     ]);
+    const branchId = await this.branchesService.resolve(
+      companyId,
+      userId,
+      requestedBranchId,
+    );
     const [sale] = await db
       .select({
         id: sales.id,
@@ -323,7 +399,13 @@ export class SalesService {
       })
       .from(sales)
       .leftJoin(customers, eq(sales.customerId, customers.id))
-      .where(and(eq(sales.id, saleId), eq(sales.companyId, companyId)));
+      .where(
+        and(
+          eq(sales.id, saleId),
+          eq(sales.companyId, companyId),
+          eq(sales.branchId, branchId),
+        ),
+      );
     if (!sale) throw new NotFoundException('Venda não encontrada');
     const [items, payments] = await Promise.all([
       db.select().from(saleItems).where(eq(saleItems.saleId, saleId)),

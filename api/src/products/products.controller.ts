@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -25,16 +26,23 @@ export class ProductsController {
     @Param('companyId', ParseUUIDPipe) companyId: string,
     @Req() request: AuthenticatedRequest,
     @Body() dto: CreateProductDto,
+    @Headers('x-branch-id') branchId?: string,
   ) {
-    return this.productsService.create(companyId, request.user.sub, dto);
+    return this.productsService.create(
+      companyId,
+      request.user.sub,
+      dto,
+      branchId,
+    );
   }
 
   @Get()
   findAll(
     @Param('companyId', ParseUUIDPipe) companyId: string,
     @Req() request: AuthenticatedRequest,
+    @Headers('x-branch-id') branchId?: string,
   ) {
-    return this.productsService.findAll(companyId, request.user.sub);
+    return this.productsService.findAll(companyId, request.user.sub, branchId);
   }
 
   @Patch(':productId')
@@ -43,12 +51,14 @@ export class ProductsController {
     @Param('productId', ParseUUIDPipe) productId: string,
     @Req() request: AuthenticatedRequest,
     @Body() dto: UpdateProductDto,
+    @Headers('x-branch-id') branchId?: string,
   ) {
     return this.productsService.update(
       companyId,
       productId,
       request.user.sub,
       dto,
+      branchId,
     );
   }
 }

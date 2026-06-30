@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   Param,
   ParseUUIDPipe,
   Post,
@@ -20,20 +21,23 @@ export class PurchasesController {
     @Param('companyId', ParseUUIDPipe) companyId: string,
     @Req() req: AuthenticatedRequest,
     @Body() dto: CreatePurchaseDto,
+    @Headers('x-branch-id') branchId?: string,
   ) {
-    return this.service.create(companyId, req.user.sub, dto);
+    return this.service.create(companyId, req.user.sub, dto, branchId);
   }
   @Get() findAll(
     @Param('companyId', ParseUUIDPipe) companyId: string,
     @Req() req: AuthenticatedRequest,
+    @Headers('x-branch-id') branchId?: string,
   ) {
-    return this.service.findAll(companyId, req.user.sub);
+    return this.service.findAll(companyId, req.user.sub, branchId);
   }
   @Post(':purchaseId/cancel') cancel(
     @Param('companyId', ParseUUIDPipe) companyId: string,
     @Param('purchaseId', ParseUUIDPipe) purchaseId: string,
     @Req() req: AuthenticatedRequest,
+    @Headers('x-branch-id') branchId?: string,
   ) {
-    return this.service.cancel(companyId, purchaseId, req.user.sub);
+    return this.service.cancel(companyId, purchaseId, req.user.sub, branchId);
   }
 }

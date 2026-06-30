@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   Param,
   ParseUUIDPipe,
   Post,
@@ -24,11 +25,13 @@ export class CashController {
     @Param('companyId', ParseUUIDPipe) companyId: string,
     @Req() request: AuthenticatedRequest,
     @Body() dto: OpenCashSessionDto,
+    @Headers('x-branch-id') branchId?: string,
   ) {
     return this.cashService.open(
       companyId,
       request.user.sub,
       dto.openingAmount,
+      branchId,
     );
   }
 
@@ -36,8 +39,9 @@ export class CashController {
   findCurrent(
     @Param('companyId', ParseUUIDPipe) companyId: string,
     @Req() request: AuthenticatedRequest,
+    @Headers('x-branch-id') branchId?: string,
   ) {
-    return this.cashService.findCurrent(companyId, request.user.sub);
+    return this.cashService.findCurrent(companyId, request.user.sub, branchId);
   }
 
   @Get(':sessionId/summary')

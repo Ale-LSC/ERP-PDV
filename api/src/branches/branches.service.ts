@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { and, asc, eq, or } from 'drizzle-orm';
+import { and, asc, desc, eq, or } from 'drizzle-orm';
 import { CompaniesService } from '../companies/companies.service';
 import { db } from '../database/drizzle';
 import { branches, branchUsers } from '../database/schema/branches.schema';
@@ -111,5 +111,41 @@ export class BranchesService {
       .values({ branchId, userId: targetUserId })
       .onConflictDoNothing();
     return { branchId, userId: targetUserId };
+  }
+
+  async resolve(companyId: string, userId: string, requestedId?: string) {
+    const role = await this.companiesService.assertRole(companyId, userId);
+    const conditions = [
+      eq(branches.companyId, companyId),
+      eq(branches.isActive, true),
+    ];
+    if (requestedId) conditions.push(eq(branches.id, requestedId));
+    const query = db
+      .select({ id: branches.id })
+      .from(branches)
+      .leftJoin(
+        branchUsers,
+        and(
+          eq(branchUsers.branchId, branches.id),
+          eq(branchUsers.userId, userId),
+        ),
+      )
+      .where(
+        and(
+          ...conditions,
+          role === 'owner' || role === 'admin'
+            ? undefined
+            : or(
+                eq(branchUsers.userId, userId),
+                eq(branches.isHeadquarters, true),
+              ),
+        ),
+      )
+      .orderBy(desc(branches.isHeadquarters))
+      .limit(1);
+    const [branch] = await query;
+    if (!branch)
+      throw new ForbiddenException('Filial não disponível para este usuário');
+    return branch.id;
   }
 }
