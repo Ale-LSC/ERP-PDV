@@ -81,6 +81,14 @@ pnpm test
 O fluxo operacional cobre empresas, equipe, clientes, fornecedores, produtos,
 estoque, compras, caixa, vendas, comprovantes, relatórios e financeiro.
 
+## Leitor de código de barras
+
+O PDV aceita leitores USB ou Bluetooth configurados no modo teclado. Cadastre o
+código no produto, mantenha o cursor na busca do PDV e configure o leitor para
+enviar `Enter` após a leitura. O produto é incluído automaticamente e o campo é
+limpo para a próxima leitura. Também é possível digitar um SKU e pressionar
+`Enter`.
+
 ## Estoque
 
 - **Quantidade disponível** é o saldo real que pode ser vendido.

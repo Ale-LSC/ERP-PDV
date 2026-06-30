@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+} from "react";
 import "./App.css";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
@@ -988,6 +995,7 @@ function Pdv({
   const [recentSales, setRecentSales] = useState<Sale[]>([]);
   const [lastChange, setLastChange] = useState(0);
   const [receipt, setReceipt] = useState<SaleReceipt | null>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
   const [feedback, setFeedback] = useState<{
     kind: "error" | "success";
     text: string;
@@ -1051,7 +1059,10 @@ function Pdv({
   }
 
   function addProduct(product: Product) {
-    if (Number(product.stockQuantity) <= 0) return;
+    if (Number(product.stockQuantity) <= 0) {
+      setFeedback({ kind: "error", text: `${product.name} está sem estoque.` });
+      return;
+    }
     setCart((current) => {
       const existing = current.find((item) => item.product.id === product.id);
       if (!existing) return [...current, { product, quantity: 1 }];
@@ -1062,6 +1073,33 @@ function Pdv({
           : item,
       );
     });
+  }
+
+  function handleProductCode(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    const code = search.trim().toLowerCase();
+    if (!code) return;
+    const product = products.find(
+      (item) =>
+        item.barcode?.trim().toLowerCase() === code ||
+        item.sku.trim().toLowerCase() === code,
+    );
+    if (!product) {
+      setFeedback({
+        kind: "error",
+        text: `Código não cadastrado: ${search.trim()}`,
+      });
+      setSearch("");
+      return;
+    }
+    addProduct(product);
+    setSearch("");
+    setFeedback({ kind: "success", text: `${product.name} adicionado.` });
+  }
+
+  function refocusScanner() {
+    window.setTimeout(() => searchRef.current?.focus(), 0);
   }
 
   function changeQuantity(productId: string, quantity: number) {
@@ -1341,15 +1379,26 @@ function Pdv({
       <section className="pdv-layout">
         <div className="pdv-catalog panel">
           <input
+            ref={searchRef}
             className="product-search"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
+            onKeyDown={handleProductCode}
             placeholder="Buscar por nome, SKU ou código de barras"
             autoFocus
           />
+          <small className="scanner-hint">
+            Leitor ativo: bipar o código e pressionar Enter
+          </small>
           <div className="pdv-products">
             {filteredProducts.map((product) => (
-              <button key={product.id} onClick={() => addProduct(product)}>
+              <button
+                key={product.id}
+                onClick={() => {
+                  addProduct(product);
+                  refocusScanner();
+                }}
+              >
                 <strong>{product.name}</strong>
                 <small>{product.sku}</small>
                 <span>{formatCurrency(Number(product.salePrice))}</span>
@@ -1534,7 +1583,13 @@ function Pdv({
         <div className="receipt-overlay" role="dialog" aria-modal="true">
           <article className="receipt">
             <div className="receipt-actions">
-              <button className="secondary" onClick={() => setReceipt(null)}>
+              <button
+                className="secondary"
+                onClick={() => {
+                  setReceipt(null);
+                  refocusScanner();
+                }}
+              >
                 Fechar
               </button>
               <button className="primary" onClick={() => window.print()}>
