@@ -1,5 +1,6 @@
 import { Controller, Get } from '@nestjs/common';
 import { AppService } from './app.service';
+import { pool } from './database/drizzle';
 
 @Controller()
 export class AppController {
@@ -8,5 +9,15 @@ export class AppController {
   @Get()
   getHello(): string {
     return this.appService.getHello();
+  }
+
+  @Get('health')
+  async health() {
+    await pool.query('select 1');
+
+    return {
+      api: 'ok',
+      database: 'connected',
+    };
   }
 }

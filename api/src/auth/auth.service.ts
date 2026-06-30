@@ -15,9 +15,9 @@ export class AuthService {
     const [user] = await db
       .select()
       .from(users)
-      .where(eq(users.email, loginDto.email));
+      .where(eq(users.email, loginDto.email.trim().toLowerCase()));
 
-    if (!user) {
+    if (!user || !user.isActive) {
       throw new UnauthorizedException('Invalid credentials');
     }
 

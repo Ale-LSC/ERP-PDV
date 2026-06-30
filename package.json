@@ -1,8 +1,13 @@
 {
-	"dependencies": {
-		"bcrypt": "^6.0.0"
-	},
-	"devDependencies": {
-		"@types/bcrypt": "^6.0.0"
-	}
+  "name": "erp-pdv",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.5.2",
+  "scripts": {
+    "build": "pnpm --recursive build",
+    "check": "pnpm lint && pnpm test && pnpm build",
+    "format": "pnpm --filter api format && pnpm --filter web exec prettier --write src",
+    "lint": "pnpm --recursive lint",
+    "test": "pnpm --filter api test"
+  }
 }

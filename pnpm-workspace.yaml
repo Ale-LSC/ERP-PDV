@@ -1,2 +1,9 @@
+packages:
+  - api
+  - web
+
 allowBuilds:
-  bcrypt: false
+  bcrypt: true
+  esbuild: true
+  inotify: set this to true or false
+  unrs-resolver: true
