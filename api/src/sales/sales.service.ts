@@ -29,7 +29,11 @@ export class SalesService {
   constructor(private readonly companiesService: CompaniesService) {}
 
   async create(companyId: string, userId: string, dto: CreateSaleDto) {
-    await this.companiesService.assertRole(companyId, userId);
+    await this.companiesService.assertRole(companyId, userId, [
+      'owner',
+      'admin',
+      'cashier',
+    ]);
     const consolidatedItems = this.consolidateItems(dto.items);
 
     return db.transaction(async (tx) => {
@@ -287,7 +291,11 @@ export class SalesService {
   }
 
   async findRecent(companyId: string, userId: string) {
-    await this.companiesService.assertRole(companyId, userId);
+    await this.companiesService.assertRole(companyId, userId, [
+      'owner',
+      'admin',
+      'cashier',
+    ]);
 
     return db
       .select()
@@ -298,7 +306,11 @@ export class SalesService {
   }
 
   async findOne(companyId: string, saleId: string, userId: string) {
-    await this.companiesService.assertRole(companyId, userId);
+    await this.companiesService.assertRole(companyId, userId, [
+      'owner',
+      'admin',
+      'cashier',
+    ]);
     const [sale] = await db
       .select({
         id: sales.id,

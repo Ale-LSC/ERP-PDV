@@ -10,7 +10,13 @@ import "./App.css";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
 
-type Company = { id: string; name: string; role: string };
+type Company = {
+  id: string;
+  name: string;
+  role: string;
+  segment: string;
+  size: string;
+};
 type Product = {
   id: string;
   name: string;
@@ -29,6 +35,16 @@ type StockMovement = {
   previousQuantity: string;
   resultingQuantity: string;
   reason: string | null;
+  createdAt: string;
+};
+type ReplenishmentRequest = {
+  id: string;
+  productId: string;
+  productName: string;
+  quantity: string;
+  note: string | null;
+  status: "pending" | "fulfilled" | "cancelled";
+  requestedByName: string;
   createdAt: string;
 };
 type CashSession = {
@@ -112,6 +128,20 @@ type FinanceSummary = Record<
   "payable" | "receivable",
   { pending: string; paid: string; count: number }
 >;
+type AppSection =
+  | "dashboard"
+  | "pdv"
+  | "products"
+  | "stock"
+  | "customers"
+  | "finance"
+  | "purchases";
+function defaultSectionForRole(role?: string): AppSection {
+  if (role === "cashier") return "pdv";
+  if (role === "stock") return "stock";
+  if (role === "finance") return "finance";
+  return "dashboard";
+}
 type Supplier = {
   id: string;
   name: string;
@@ -160,15 +190,7 @@ function App() {
   const [companyId, setCompanyId] = useState("");
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [section, setSection] = useState<
-    | "dashboard"
-    | "pdv"
-    | "products"
-    | "stock"
-    | "customers"
-    | "finance"
-    | "purchases"
-  >("dashboard");
+  const [section, setSection] = useState<AppSection>("dashboard");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -177,6 +199,7 @@ function App() {
       .then((items) => {
         setCompanies(items);
         setCompanyId((current) => current || items[0]?.id || "");
+        setSection(defaultSectionForRole(items[0]?.role));
       })
       .catch((reason: Error) => setError(reason.message));
   }, [token]);
@@ -207,6 +230,8 @@ function App() {
   if (!token) return <AuthScreen onAuthenticated={authenticate} />;
 
   const company = companies.find((item) => item.id === companyId);
+  const role = company?.role ?? "cashier";
+  const fullAccess = role === "owner" || role === "admin";
   const lowStock = products.filter(
     (product) => Number(product.stockQuantity) <= Number(product.minimumStock),
   ).length;
@@ -219,50 +244,64 @@ function App() {
           <strong>ERP PDV</strong>
         </div>
         <nav>
-          <button
-            className={section === "dashboard" ? "active" : ""}
-            onClick={() => setSection("dashboard")}
-          >
-            Visão geral
-          </button>
-          <button
-            className={section === "pdv" ? "active" : ""}
-            onClick={() => setSection("pdv")}
-          >
-            PDV
-          </button>
-          <button
-            className={section === "products" ? "active" : ""}
-            onClick={() => setSection("products")}
-          >
-            Produtos
-          </button>
-          <button
-            className={section === "stock" ? "active" : ""}
-            onClick={() => setSection("stock")}
-          >
-            Estoque
-          </button>
-          <button
-            className={section === "customers" ? "active" : ""}
-            onClick={() => setSection("customers")}
-          >
-            Clientes
-          </button>
-          {company?.role !== "cashier" && (
+          {fullAccess && (
+            <button
+              className={section === "dashboard" ? "active" : ""}
+              onClick={() => setSection("dashboard")}
+            >
+              Visão geral
+            </button>
+          )}
+          {(fullAccess || role === "cashier") && (
+            <button
+              className={section === "pdv" ? "active" : ""}
+              onClick={() => setSection("pdv")}
+            >
+              PDV
+            </button>
+          )}
+          {(fullAccess || role === "stock") && (
+            <button
+              className={section === "products" ? "active" : ""}
+              onClick={() => setSection("products")}
+            >
+              Produtos
+            </button>
+          )}
+          {(fullAccess || role === "stock") && (
+            <button
+              className={section === "stock" ? "active" : ""}
+              onClick={() => setSection("stock")}
+            >
+              Estoque
+            </button>
+          )}
+          {(fullAccess || role === "cashier") && (
+            <button
+              className={section === "customers" ? "active" : ""}
+              onClick={() => setSection("customers")}
+            >
+              Clientes
+            </button>
+          )}
+          {(fullAccess || role === "stock" || role === "finance") && (
             <>
-              <button
-                className={section === "purchases" ? "active" : ""}
-                onClick={() => setSection("purchases")}
-              >
-                Compras
-              </button>
-              <button
-                className={section === "finance" ? "active" : ""}
-                onClick={() => setSection("finance")}
-              >
-                Financeiro
-              </button>
+              {(fullAccess || role === "stock") && (
+                <button
+                  className={section === "purchases" ? "active" : ""}
+                  onClick={() => setSection("purchases")}
+                >
+                  Compras
+                </button>
+              )}
+              {(fullAccess || role === "finance") && (
+                <button
+                  className={section === "finance" ? "active" : ""}
+                  onClick={() => setSection("finance")}
+                >
+                  Financeiro
+                </button>
+              )}
             </>
           )}
         </nav>
@@ -285,12 +324,7 @@ function App() {
                   (item) => item.id === event.target.value,
                 );
                 setCompanyId(event.target.value);
-                if (
-                  nextCompany?.role === "cashier" &&
-                  (section === "finance" || section === "purchases")
-                ) {
-                  setSection("dashboard");
-                }
+                setSection(defaultSectionForRole(nextCompany?.role));
               }}
             >
               {companies.map((item) => (
@@ -517,6 +551,8 @@ function CreateCompany({
           body: JSON.stringify({
             name: data.get("name"),
             document: data.get("document") || undefined,
+            segment: data.get("segment"),
+            size: data.get("size"),
           }),
         },
         token,
@@ -531,6 +567,18 @@ function CreateCompany({
       <form className="inline-form" onSubmit={(event) => void submit(event)}>
         <input name="name" placeholder="Nome da empresa" required />
         <input name="document" placeholder="CNPJ (opcional)" />
+        <select name="segment" defaultValue="retail">
+          <option value="market">Mercado</option>
+          <option value="industry">Indústria</option>
+          <option value="retail">Comércio</option>
+          <option value="services">Serviços</option>
+          <option value="other">Outro</option>
+        </select>
+        <select name="size" defaultValue="small">
+          <option value="small">Pequena</option>
+          <option value="medium">Média</option>
+          <option value="large">Grande</option>
+        </select>
         <button className="primary">Criar empresa</button>
       </form>
     </section>
@@ -1237,6 +1285,36 @@ function Pdv({
       });
     }
   }
+  async function requestRestock(product: Product) {
+    const value = window.prompt(
+      `Quantidade solicitada para ${product.name}:`,
+      "1",
+    );
+    if (!value) return;
+    try {
+      await api(
+        `/companies/${companyId}/replenishment-requests`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            productId: product.id,
+            quantity: Number(value),
+            note: "Solicitado pelo PDV",
+          }),
+        },
+        token,
+      );
+      setFeedback({ kind: "success", text: "Solicitação enviada ao estoque." });
+    } catch (reason) {
+      setFeedback({
+        kind: "error",
+        text:
+          reason instanceof Error
+            ? reason.message
+            : "Erro ao solicitar reposição.",
+      });
+    }
+  }
 
   async function closeCash(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1409,6 +1487,30 @@ function Pdv({
               <p className="empty-row">Nenhum produto disponível.</p>
             )}
           </div>
+          {products.some(
+            (product) =>
+              Number(product.stockQuantity) <= Number(product.minimumStock),
+          ) && (
+            <div className="restock-shortcuts">
+              <h4>Reposição necessária</h4>
+              {products
+                .filter(
+                  (product) =>
+                    Number(product.stockQuantity) <=
+                    Number(product.minimumStock),
+                )
+                .slice(0, 8)
+                .map((product) => (
+                  <button
+                    key={product.id}
+                    className="secondary"
+                    onClick={() => void requestRestock(product)}
+                  >
+                    Solicitar {product.name}
+                  </button>
+                ))}
+            </div>
+          )}
         </div>
         <aside className="cart panel">
           <div className="cart-header">
@@ -2423,6 +2525,7 @@ function Stock({
   onChanged: () => void;
 }) {
   const [movements, setMovements] = useState<StockMovement[]>([]);
+  const [requests, setRequests] = useState<ReplenishmentRequest[]>([]);
   const [movementType, setMovementType] = useState<StockMovement["type"]>("in");
   const [feedback, setFeedback] = useState<{
     kind: "error" | "success";
@@ -2438,6 +2541,13 @@ function Stock({
           token,
         ),
       );
+      setRequests(
+        await api<ReplenishmentRequest[]>(
+          `/companies/${companyId}/replenishment-requests`,
+          {},
+          token,
+        ),
+      );
     } catch (reason) {
       setFeedback({
         kind: "error",
@@ -2448,6 +2558,29 @@ function Stock({
       });
     }
   }, [companyId, token]);
+
+  async function fulfillRequest(id: string) {
+    try {
+      await api(
+        `/companies/${companyId}/replenishment-requests/${id}/fulfill`,
+        { method: "PATCH" },
+        token,
+      );
+      setFeedback({
+        kind: "success",
+        text: "Solicitação marcada como atendida.",
+      });
+      await loadMovements();
+    } catch (reason) {
+      setFeedback({
+        kind: "error",
+        text:
+          reason instanceof Error
+            ? reason.message
+            : "Erro ao atender solicitação.",
+      });
+    }
+  }
 
   useEffect(() => {
     // Fetch assíncrono necessário ao abrir ou trocar a empresa do inventário.
@@ -2512,6 +2645,33 @@ function Stock({
           <button onClick={() => setFeedback(null)}>×</button>
         </div>
       )}
+      <section className="panel">
+        <h3>Solicitações do PDV</h3>
+        <div className="request-list">
+          {requests
+            .filter((request) => request.status === "pending")
+            .map((request) => (
+              <article key={request.id}>
+                <div>
+                  <strong>{request.productName}</strong>
+                  <small>
+                    {Number(request.quantity)} solicitado por{" "}
+                    {request.requestedByName}
+                  </small>
+                </div>
+                <button
+                  className="primary"
+                  onClick={() => void fulfillRequest(request.id)}
+                >
+                  Atendida
+                </button>
+              </article>
+            ))}
+          {!requests.some((request) => request.status === "pending") && (
+            <p className="empty-row">Nenhuma solicitação pendente.</p>
+          )}
+        </div>
+      </section>
       <section className="panel">
         <form className="stock-form" onSubmit={(event) => void submit(event)}>
           <label>

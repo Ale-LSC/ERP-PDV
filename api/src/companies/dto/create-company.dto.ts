@@ -1,4 +1,16 @@
-import { IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
+import {
+  IsIn,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  MaxLength,
+} from 'class-validator';
+import {
+  companySegments,
+  companySizes,
+  type CompanySize,
+  type CompanySegment,
+} from '../../database/schema/companies.schema';
 
 export class CreateCompanyDto {
   @IsString()
@@ -10,4 +22,10 @@ export class CreateCompanyDto {
   @IsString()
   @MaxLength(20)
   document?: string;
+
+  @IsIn(companySegments)
+  segment: CompanySegment;
+
+  @IsIn(companySizes)
+  size: CompanySize;
 }

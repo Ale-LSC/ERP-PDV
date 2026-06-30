@@ -22,6 +22,7 @@ export class PurchasesService {
     await this.companiesService.assertRole(companyId, userId, [
       'owner',
       'admin',
+      'stock',
     ]);
     return db.transaction(async (tx) => {
       const [supplier] = await tx
@@ -131,6 +132,7 @@ export class PurchasesService {
     await this.companiesService.assertRole(companyId, userId, [
       'owner',
       'admin',
+      'stock',
     ]);
     return db
       .select({
@@ -153,6 +155,7 @@ export class PurchasesService {
     await this.companiesService.assertRole(companyId, userId, [
       'owner',
       'admin',
+      'stock',
     ]);
     return db.transaction(async (tx) => {
       const [purchase] = await tx

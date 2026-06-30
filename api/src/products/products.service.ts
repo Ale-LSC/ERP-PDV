@@ -20,6 +20,7 @@ export class ProductsService {
     await this.companiesService.assertRole(companyId, userId, [
       'owner',
       'admin',
+      'stock',
     ]);
     const sku = await this.generateUniqueSku(companyId, dto.name);
 
@@ -90,6 +91,7 @@ export class ProductsService {
     await this.companiesService.assertRole(companyId, userId, [
       'owner',
       'admin',
+      'stock',
     ]);
 
     try {

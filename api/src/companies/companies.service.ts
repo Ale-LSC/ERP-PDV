@@ -8,6 +8,7 @@ import { db } from '../database/drizzle';
 import {
   companies,
   companyUsers,
+  companyRoles,
   type CompanyRole,
 } from '../database/schema/companies.schema';
 import { CreateCompanyDto } from './dto/create-company.dto';
@@ -23,6 +24,8 @@ export class CompaniesService {
         .values({
           name: dto.name.trim(),
           document: dto.document?.replace(/\D/g, '') || null,
+          segment: dto.segment,
+          size: dto.size,
         })
         .returning();
 
@@ -42,6 +45,8 @@ export class CompaniesService {
         id: companies.id,
         name: companies.name,
         document: companies.document,
+        segment: companies.segment,
+        size: companies.size,
         role: companyUsers.role,
         createdAt: companies.createdAt,
         updatedAt: companies.updatedAt,
@@ -127,7 +132,7 @@ export class CompaniesService {
   async assertRole(
     companyId: string,
     userId: string,
-    allowedRoles: readonly CompanyRole[] = ['owner', 'admin', 'cashier'],
+    allowedRoles: readonly CompanyRole[] = companyRoles,
   ): Promise<CompanyRole> {
     const [membership] = await db
       .select({ role: companyUsers.role })

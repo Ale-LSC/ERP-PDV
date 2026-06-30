@@ -504,6 +504,25 @@ td {
   color: var(--muted);
   margin: -0.35rem 0 0.8rem;
 }
+.restock-shortcuts {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.restock-shortcuts h4 {
+  width: 100%;
+  margin: 0 0 0.4rem;
+}
+.request-list article {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--line);
+}
 .pdv-products {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));

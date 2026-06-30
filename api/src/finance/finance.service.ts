@@ -22,6 +22,7 @@ export class FinanceService {
     await this.companiesService.assertRole(companyId, userId, [
       'owner',
       'admin',
+      'finance',
     ]);
     const [entry] = await db
       .insert(financialEntries)
@@ -46,6 +47,7 @@ export class FinanceService {
     await this.companiesService.assertRole(companyId, userId, [
       'owner',
       'admin',
+      'finance',
     ]);
     const conditions = [eq(financialEntries.companyId, companyId)];
     if (filters.type) conditions.push(eq(financialEntries.type, filters.type));
@@ -62,6 +64,7 @@ export class FinanceService {
     await this.companiesService.assertRole(companyId, userId, [
       'owner',
       'admin',
+      'finance',
     ]);
     return db.transaction(async (tx) => {
       const [entry] = await tx
@@ -95,6 +98,7 @@ export class FinanceService {
     await this.companiesService.assertRole(companyId, userId, [
       'owner',
       'admin',
+      'finance',
     ]);
     const rows = await db
       .select({

@@ -81,6 +81,21 @@ pnpm test
 O fluxo operacional cobre empresas, equipe, clientes, fornecedores, produtos,
 estoque, compras, caixa, vendas, comprovantes, relatórios e financeiro.
 
+### Perfis de acesso
+
+- `owner`: acesso completo e gestão de proprietários.
+- `admin`: acesso operacional completo e gestão da equipe.
+- `finance`: financeiro e relatórios.
+- `stock`: produtos, estoque, fornecedores e compras.
+- `cashier`: somente PDV, clientes e solicitações de reposição.
+
+No cadastro, a empresa informa segmento (mercado, indústria, comércio,
+serviços ou outro) e porte. Esses dados formam a base para ativar fluxos
+especializados sem misturar regras de segmentos diferentes.
+
+O operador do PDV pode solicitar reposição de itens com estoque baixo. A equipe
+de estoque acompanha e marca cada solicitação como atendida.
+
 ## Leitor de código de barras
 
 O PDV aceita leitores USB ou Bluetooth configurados no modo teclado. Cadastre o

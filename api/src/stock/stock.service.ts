@@ -24,6 +24,7 @@ export class StockService {
     await this.companiesService.assertRole(companyId, userId, [
       'owner',
       'admin',
+      'stock',
     ]);
 
     if (dto.type !== StockMovementType.ADJUSTMENT && dto.quantity <= 0) {
@@ -90,7 +91,11 @@ export class StockService {
   }
 
   async findAll(companyId: string, userId: string) {
-    await this.companiesService.assertRole(companyId, userId);
+    await this.companiesService.assertRole(companyId, userId, [
+      'owner',
+      'admin',
+      'stock',
+    ]);
 
     return db
       .select()

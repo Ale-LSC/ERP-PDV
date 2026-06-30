@@ -15,7 +15,11 @@ export class CashService {
   constructor(private readonly companiesService: CompaniesService) {}
 
   async open(companyId: string, userId: string, openingAmount: number) {
-    await this.companiesService.assertRole(companyId, userId);
+    await this.companiesService.assertRole(companyId, userId, [
+      'owner',
+      'admin',
+      'cashier',
+    ]);
 
     try {
       const [session] = await db
@@ -43,7 +47,11 @@ export class CashService {
   }
 
   async findCurrent(companyId: string, userId: string) {
-    await this.companiesService.assertRole(companyId, userId);
+    await this.companiesService.assertRole(companyId, userId, [
+      'owner',
+      'admin',
+      'cashier',
+    ]);
 
     const [session] = await db
       .select()
@@ -65,7 +73,11 @@ export class CashService {
     userId: string,
     closingAmount: number,
   ) {
-    await this.companiesService.assertRole(companyId, userId);
+    await this.companiesService.assertRole(companyId, userId, [
+      'owner',
+      'admin',
+      'cashier',
+    ]);
 
     const [session] = await db
       .update(cashSessions)
@@ -100,7 +112,11 @@ export class CashService {
   }
 
   async getSummary(companyId: string, sessionId: string, userId: string) {
-    const role = await this.companiesService.assertRole(companyId, userId);
+    const role = await this.companiesService.assertRole(companyId, userId, [
+      'owner',
+      'admin',
+      'cashier',
+    ]);
     const [session] = await db
       .select()
       .from(cashSessions)

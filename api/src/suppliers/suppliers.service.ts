@@ -17,6 +17,7 @@ export class SuppliersService {
     await this.companiesService.assertRole(companyId, userId, [
       'owner',
       'admin',
+      'stock',
     ]);
     try {
       const [result] = await db
@@ -32,6 +33,7 @@ export class SuppliersService {
     await this.companiesService.assertRole(companyId, userId, [
       'owner',
       'admin',
+      'stock',
     ]);
     return db
       .select()
@@ -51,6 +53,7 @@ export class SuppliersService {
     await this.companiesService.assertRole(companyId, userId, [
       'owner',
       'admin',
+      'stock',
     ]);
     try {
       const [result] = await db

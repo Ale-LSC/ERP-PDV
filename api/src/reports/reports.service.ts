@@ -20,6 +20,7 @@ export class ReportsService {
     await this.companiesService.assertRole(companyId, userId, [
       'owner',
       'admin',
+      'finance',
     ]);
     const { start, end } = resolveReportPeriod(period.from, period.to);
     const completedSales = and(
