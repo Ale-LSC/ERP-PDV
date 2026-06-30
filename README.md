@@ -29,6 +29,19 @@ pnpm --filter web dev
 
 A API usa `http://localhost:3000` e o frontend usa `http://localhost:5173`.
 
+## Ordem do cadastro
+
+O primeiro cadastro é feito em uma única transação na seguinte ordem:
+
+1. Administrador principal (dono da conta).
+2. Empresa e sua unidade Matriz.
+3. Filiais adicionais, cadastradas pelo administrador.
+4. Administradores e funcionários, com função e filial definidas.
+
+O endpoint público `POST /onboarding` cria o administrador, a empresa, a matriz
+e todos os vínculos iniciais. Depois disso, novos acessos são criados somente
+por dono ou administrador na seção **Funcionários**.
+
 ## Comandos
 
 ```bash

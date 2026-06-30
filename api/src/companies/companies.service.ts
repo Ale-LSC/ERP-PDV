@@ -18,9 +18,63 @@ import { branches, branchUsers } from '../database/schema/branches.schema';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import * as bcrypt from 'bcrypt';
 import { ConflictException } from '@nestjs/common';
+import { OnboardCompanyDto } from './dto/onboard-company.dto';
 
 @Injectable()
 export class CompaniesService {
+  async onboard(dto: OnboardCompanyDto) {
+    const email = dto.adminEmail.trim().toLowerCase();
+    try {
+      return await db.transaction(async (tx) => {
+        const [user] = await tx
+          .insert(users)
+          .values({
+            name: dto.adminName.trim(),
+            email,
+            passwordHash: await bcrypt.hash(dto.password, 10),
+          })
+          .returning({ id: users.id, name: users.name, email: users.email });
+        const [company] = await tx
+          .insert(companies)
+          .values({
+            name: dto.companyName.trim(),
+            document: dto.document?.replace(/\D/g, '') || null,
+            segment: dto.segment,
+            size: dto.size,
+          })
+          .returning();
+        await tx
+          .insert(companyUsers)
+          .values({ companyId: company.id, userId: user.id, role: 'owner' });
+        const [headquarters] = await tx
+          .insert(branches)
+          .values({
+            companyId: company.id,
+            name: 'Matriz',
+            code: 'MATRIZ',
+            isHeadquarters: true,
+          })
+          .returning();
+        await tx
+          .insert(branchUsers)
+          .values({ branchId: headquarters.id, userId: user.id });
+        return {
+          user,
+          company: { ...company, role: 'owner' as const },
+          branch: headquarters,
+        };
+      });
+    } catch (error) {
+      if (
+        typeof error === 'object' &&
+        error &&
+        'code' in error &&
+        error.code === '23505'
+      )
+        throw new ConflictException('E-mail ou documento já cadastrado');
+      throw error;
+    }
+  }
   async create(userId: string, dto: CreateCompanyDto) {
     return db.transaction(async (tx) => {
       const [company] = await tx

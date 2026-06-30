@@ -813,6 +813,33 @@ td {
   display: grid;
   gap: 18px;
 }
+.auth-panel form.onboarding-form {
+  width: min(720px, 100%);
+  grid-template-columns: 1fr 1fr;
+}
+.onboarding-form > div:first-child,
+.onboarding-form > .alert,
+.onboarding-form > .primary,
+.onboarding-form > .link,
+.onboarding-company {
+  grid-column: 1/-1;
+}
+.onboarding-flow {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.onboarding-company {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.onboarding-company h3 {
+  grid-column: 1/-1;
+  margin: 0;
+}
 .auth-panel h2 {
   font-size: 30px;
   margin: 7px 0 8px;
@@ -1271,5 +1298,12 @@ input:-webkit-autofill {
   }
   .modal-form label {
     grid-column: 1/-1;
+  }
+  .auth-panel form.onboarding-form,
+  .onboarding-company {
+    grid-template-columns: 1fr;
+  }
+  .onboarding-company h3 {
+    grid-column: 1;
   }
 }

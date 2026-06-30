@@ -746,11 +746,20 @@ function AuthScreen({
     const email = String(data.get("email"));
     const password = String(data.get("password"));
     try {
-      if (register)
-        await api("/users", {
+      if (register) {
+        await api("/onboarding", {
           method: "POST",
-          body: JSON.stringify({ name: data.get("name"), email, password }),
+          body: JSON.stringify({
+            adminName: data.get("name"),
+            adminEmail: email,
+            password,
+            companyName: data.get("companyName"),
+            document: data.get("document") || undefined,
+            segment: data.get("segment"),
+            size: data.get("size"),
+          }),
         });
+      }
       const result = await api<{ accessToken: string }>("/auth/login", {
         method: "POST",
         body: JSON.stringify({ email, password }),
@@ -776,15 +785,20 @@ function AuthScreen({
         </div>
       </section>
       <section className="auth-panel">
-        <form onSubmit={submit}>
+        <form className={register ? "onboarding-form" : ""} onSubmit={submit}>
           <div>
             <small>BEM-VINDO</small>
-            <h2>{register ? "Crie sua conta" : "Acesse sua operação"}</h2>
+            <h2>{register ? "Crie sua matriz" : "Acesse sua operação"}</h2>
+            {register && (
+              <p className="onboarding-flow">
+                Matriz → Filiais → Administradores → Funcionários
+              </p>
+            )}
           </div>
           {error && <div className="alert">{error}</div>}
           {register && (
             <label>
-              Nome
+              Nome do administrador principal
               <input name="name" required minLength={2} />
             </label>
           )}
@@ -794,10 +808,41 @@ function AuthScreen({
           </label>
           <label>
             Senha
-            <input name="password" type="password" required minLength={6} />
+            <input name="password" type="password" required minLength={8} />
           </label>
+          {register && (
+            <div className="onboarding-company">
+              <h3>Dados da matriz</h3>
+              <label>
+                Nome da empresa / matriz
+                <input name="companyName" required minLength={2} />
+              </label>
+              <label>
+                CNPJ (opcional)
+                <input name="document" />
+              </label>
+              <label>
+                Segmento
+                <select name="segment" defaultValue="retail">
+                  <option value="market">Mercado</option>
+                  <option value="industry">Indústria</option>
+                  <option value="retail">Comércio</option>
+                  <option value="services">Serviços</option>
+                  <option value="other">Outro</option>
+                </select>
+              </label>
+              <label>
+                Porte
+                <select name="size" defaultValue="small">
+                  <option value="small">Pequena</option>
+                  <option value="medium">Média</option>
+                  <option value="large">Grande</option>
+                </select>
+              </label>
+            </div>
+          )}
           <button className="primary" type="submit">
-            {register ? "Criar conta" : "Entrar"}
+            {register ? "Criar matriz e acessar" : "Entrar"}
           </button>
           <button
             className="link"
