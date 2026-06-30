@@ -14,6 +14,7 @@ import {
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { users } from '../database/schema/users.schema';
 import { AddCompanyMemberDto } from './dto/add-company-member.dto';
+import { branches, branchUsers } from '../database/schema/branches.schema';
 
 @Injectable()
 export class CompaniesService {
@@ -34,6 +35,19 @@ export class CompaniesService {
         userId,
         role: 'owner',
       });
+
+      const [headquarters] = await tx
+        .insert(branches)
+        .values({
+          companyId: company.id,
+          name: 'Matriz',
+          code: 'MATRIZ',
+          isHeadquarters: true,
+        })
+        .returning({ id: branches.id });
+      await tx
+        .insert(branchUsers)
+        .values({ branchId: headquarters.id, userId });
 
       return { ...company, role: 'owner' as const };
     });

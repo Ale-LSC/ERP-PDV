@@ -17,6 +17,7 @@ import { FinanceModule } from './finance/finance.module';
 import { SuppliersModule } from './suppliers/suppliers.module';
 import { PurchasesModule } from './purchases/purchases.module';
 import { ReplenishmentModule } from './replenishment/replenishment.module';
+import { BranchesModule } from './branches/branches.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { ReplenishmentModule } from './replenishment/replenishment.module';
     SuppliersModule,
     PurchasesModule,
     ReplenishmentModule,
+    BranchesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

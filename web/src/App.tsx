@@ -17,6 +17,13 @@ type Company = {
   segment: string;
   size: string;
 };
+type Branch = {
+  id: string;
+  name: string;
+  code: string;
+  address: string | null;
+  isHeadquarters: boolean;
+};
 type Product = {
   id: string;
   name: string;
@@ -432,11 +439,19 @@ function Team({ token, companyId }: { token: string; companyId: string }) {
     Array<{ id: string; name: string; email: string; role: string }>
   >([]);
   const [feedback, setFeedback] = useState("");
-  const load = useCallback(
-    async () =>
-      setMembers(await api(`/companies/${companyId}/members`, {}, token)),
-    [companyId, token],
-  );
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const load = useCallback(async () => {
+    const [memberRows, branchRows] = await Promise.all([
+      api<Array<{ id: string; name: string; email: string; role: string }>>(
+        `/companies/${companyId}/members`,
+        {},
+        token,
+      ),
+      api<Branch[]>(`/companies/${companyId}/branches`, {}, token),
+    ]);
+    setMembers(memberRows);
+    setBranches(branchRows);
+  }, [companyId, token]);
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void load().catch((reason: Error) => setFeedback(reason.message));
@@ -463,6 +478,32 @@ function Team({ token, companyId }: { token: string; companyId: string }) {
     } catch (reason) {
       setFeedback(
         reason instanceof Error ? reason.message : "Erro ao atualizar equipe.",
+      );
+    }
+  }
+  async function createBranch(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    try {
+      await api(
+        `/companies/${companyId}/branches`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            name: data.get("name"),
+            code: data.get("code"),
+            address: data.get("address") || undefined,
+          }),
+        },
+        token,
+      );
+      form.reset();
+      setFeedback("Filial criada.");
+      await load();
+    } catch (reason) {
+      setFeedback(
+        reason instanceof Error ? reason.message : "Erro ao criar filial.",
       );
     }
   }
@@ -505,6 +546,28 @@ function Team({ token, companyId }: { token: string; companyId: string }) {
           </select>
           <button className="primary">Salvar acesso</button>
         </form>
+      </section>
+      <section className="panel">
+        <h3>Filiais</h3>
+        <form
+          className="inline-form"
+          onSubmit={(event) => void createBranch(event)}
+        >
+          <input name="name" placeholder="Nome da filial" required />
+          <input name="code" placeholder="Código (LOJA02)" required />
+          <input name="address" placeholder="Endereço" />
+          <button className="primary">Criar filial</button>
+        </form>
+        <div className="roadmap">
+          {branches.map((branch) => (
+            <span
+              className={branch.isHeadquarters ? "done" : ""}
+              key={branch.id}
+            >
+              {branch.name} · {branch.code}
+            </span>
+          ))}
+        </div>
       </section>
       <section className="panel table-panel">
         <table>
