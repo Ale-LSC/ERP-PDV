@@ -15,6 +15,9 @@ import { CreateCompanyDto } from './dto/create-company.dto';
 import { users } from '../database/schema/users.schema';
 import { AddCompanyMemberDto } from './dto/add-company-member.dto';
 import { branches, branchUsers } from '../database/schema/branches.schema';
+import { CreateEmployeeDto } from './dto/create-employee.dto';
+import * as bcrypt from 'bcrypt';
+import { ConflictException } from '@nestjs/common';
 
 @Injectable()
 export class CompaniesService {
@@ -141,6 +144,81 @@ export class CompaniesService {
       .from(companyUsers)
       .innerJoin(users, eq(companyUsers.userId, users.id))
       .where(eq(companyUsers.companyId, companyId));
+  }
+
+  async createEmployee(
+    companyId: string,
+    actingUserId: string,
+    dto: CreateEmployeeDto,
+  ) {
+    const actingRole = await this.assertRole(companyId, actingUserId, [
+      'owner',
+      'admin',
+    ]);
+    if (dto.role === 'owner' && actingRole !== 'owner')
+      throw new ForbiddenException(
+        'Somente o dono pode criar outro proprietário',
+      );
+    const email = dto.email.trim().toLowerCase();
+    return db.transaction(async (tx) => {
+      let [user] = await tx
+        .select({ id: users.id, name: users.name, email: users.email })
+        .from(users)
+        .where(eq(users.email, email));
+      if (!user) {
+        const [created] = await tx
+          .insert(users)
+          .values({
+            name: dto.name.trim(),
+            email,
+            passwordHash: await bcrypt.hash(dto.password, 10),
+          })
+          .returning({ id: users.id, name: users.name, email: users.email });
+        user = created;
+      } else {
+        const [membership] = await tx
+          .select()
+          .from(companyUsers)
+          .where(
+            and(
+              eq(companyUsers.companyId, companyId),
+              eq(companyUsers.userId, user.id),
+            ),
+          );
+        if (membership)
+          throw new ConflictException('Este usuário já faz parte da empresa');
+      }
+      await tx
+        .insert(companyUsers)
+        .values({ companyId, userId: user.id, role: dto.role });
+      const branchId =
+        dto.branchId ??
+        (
+          await tx
+            .select({ id: branches.id })
+            .from(branches)
+            .where(
+              and(
+                eq(branches.companyId, companyId),
+                eq(branches.isHeadquarters, true),
+              ),
+            )
+        )[0]?.id;
+      if (branchId) {
+        const [branch] = await tx
+          .select({ id: branches.id })
+          .from(branches)
+          .where(
+            and(eq(branches.id, branchId), eq(branches.companyId, companyId)),
+          );
+        if (!branch) throw new NotFoundException('Filial não encontrada');
+        await tx
+          .insert(branchUsers)
+          .values({ branchId, userId: user.id })
+          .onConflictDoNothing();
+      }
+      return { ...user, role: dto.role, branchId };
+    });
   }
 
   async assertRole(

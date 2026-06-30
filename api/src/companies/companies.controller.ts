@@ -13,6 +13,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CompaniesService } from './companies.service';
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { AddCompanyMemberDto } from './dto/add-company-member.dto';
+import { CreateEmployeeDto } from './dto/create-employee.dto';
 
 @UseGuards(JwtAuthGuard)
 @Controller('companies')
@@ -44,5 +45,18 @@ export class CompaniesController {
     @Req() request: AuthenticatedRequest,
   ) {
     return this.companiesService.findMembers(companyId, request.user.sub);
+  }
+
+  @Post(':companyId/employees')
+  createEmployee(
+    @Param('companyId', ParseUUIDPipe) companyId: string,
+    @Req() request: AuthenticatedRequest,
+    @Body() dto: CreateEmployeeDto,
+  ) {
+    return this.companiesService.createEmployee(
+      companyId,
+      request.user.sub,
+      dto,
+    );
   }
 }

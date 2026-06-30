@@ -243,6 +243,71 @@ td small {
   place-items: center;
   padding: 1rem;
 }
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(1, 5, 11, 0.82);
+  backdrop-filter: blur(8px);
+}
+.modal-card {
+  width: min(560px, 100%);
+  max-height: 90vh;
+  overflow: auto;
+  background: #0c131e;
+  border: 1px solid #243248;
+  border-radius: 12px;
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.5);
+  padding: 24px;
+}
+.modal-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 16px;
+  margin-bottom: 20px;
+}
+.modal-heading h2 {
+  margin: 5px 0 0;
+  font-size: 21px;
+}
+.modal-heading small {
+  color: var(--green);
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+.modal-close {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 25px;
+}
+.modal-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+}
+.modal-form label {
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.modal-form label:nth-child(1),
+.modal-form label:nth-child(2),
+.modal-actions {
+  grid-column: 1/-1;
+}
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 8px;
+}
 .receipt {
   background: white;
   width: min(460px, 100%);
@@ -1200,5 +1265,11 @@ input:-webkit-autofill {
   }
   .purchase-item {
     grid-template-columns: 1fr;
+  }
+  .modal-form {
+    grid-template-columns: 1fr;
+  }
+  .modal-form label {
+    grid-column: 1/-1;
   }
 }

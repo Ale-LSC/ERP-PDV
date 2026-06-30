@@ -290,7 +290,7 @@ function App() {
               className={section === "team" ? "active" : ""}
               onClick={() => setSection("team")}
             >
-              Equipe
+              Funcionários
             </button>
           )}
           {(fullAccess || role === "cashier") && (
@@ -485,10 +485,11 @@ function Team({ token, companyId }: { token: string; companyId: string }) {
   >([]);
   const [feedback, setFeedback] = useState("");
   const [branches, setBranches] = useState<Branch[]>([]);
+  const [employeeModal, setEmployeeModal] = useState(false);
   const load = useCallback(async () => {
     const [memberRows, branchRows] = await Promise.all([
       api<Array<{ id: string; name: string; email: string; role: string }>>(
-        `/companies/${companyId}/members`,
+        `/companies/${companyId}/employees`,
         {},
         token,
       ),
@@ -511,14 +512,18 @@ function Team({ token, companyId }: { token: string; companyId: string }) {
         {
           method: "POST",
           body: JSON.stringify({
+            name: data.get("name"),
             email: data.get("email"),
+            password: data.get("password"),
             role: data.get("role"),
+            branchId: data.get("branchId") || undefined,
           }),
         },
         token,
       );
       form.reset();
-      setFeedback("Acesso atualizado.");
+      setEmployeeModal(false);
+      setFeedback("Funcionário cadastrado e acesso configurado.");
       await load();
     } catch (reason) {
       setFeedback(
@@ -564,9 +569,12 @@ function Team({ token, companyId }: { token: string; companyId: string }) {
       <section className="page-title">
         <div>
           <small>ACESSOS</small>
-          <h1>Equipe e permissões</h1>
-          <p>Cada usuário acessa somente os módulos da sua função.</p>
+          <h1>Funcionários</h1>
+          <p>Cadastre a equipe e defina a área inicial de cada pessoa.</p>
         </div>
+        <button className="primary" onClick={() => setEmployeeModal(true)}>
+          + Novo funcionário
+        </button>
       </section>
       {feedback && (
         <div className="alert success">
@@ -574,24 +582,6 @@ function Team({ token, companyId }: { token: string; companyId: string }) {
           <button onClick={() => setFeedback("")}>×</button>
         </div>
       )}
-      <section className="panel">
-        <form className="inline-form" onSubmit={(event) => void submit(event)}>
-          <input
-            name="email"
-            type="email"
-            placeholder="E-mail de usuário já cadastrado"
-            required
-          />
-          <select name="role" defaultValue="cashier">
-            <option value="admin">Administrador</option>
-            <option value="finance">Financeiro</option>
-            <option value="stock">Estoque</option>
-            <option value="cashier">Operador de PDV</option>
-            <option value="owner">Dono</option>
-          </select>
-          <button className="primary">Salvar acesso</button>
-        </form>
-      </section>
       <section className="panel">
         <h3>Filiais</h3>
         <form
@@ -634,6 +624,76 @@ function Team({ token, companyId }: { token: string; companyId: string }) {
           </tbody>
         </table>
       </section>
+      {employeeModal && (
+        <div className="modal-overlay" role="dialog" aria-modal="true">
+          <section className="modal-card">
+            <div className="modal-heading">
+              <div>
+                <small>NOVO ACESSO</small>
+                <h2>Cadastrar funcionário</h2>
+              </div>
+              <button
+                className="modal-close"
+                onClick={() => setEmployeeModal(false)}
+              >
+                ×
+              </button>
+            </div>
+            <form
+              className="modal-form"
+              onSubmit={(event) => void submit(event)}
+            >
+              <label>
+                Nome
+                <input name="name" required minLength={2} autoFocus />
+              </label>
+              <label>
+                E-mail
+                <input name="email" type="email" required />
+              </label>
+              <label>
+                Senha inicial
+                <input name="password" type="password" required minLength={8} />
+              </label>
+              <label>
+                Função
+                <select name="role" defaultValue="cashier">
+                  <option value="admin">Administrador</option>
+                  <option value="finance">Financeiro</option>
+                  <option value="stock">Estoque</option>
+                  <option value="cashier">Operador de PDV</option>
+                  <option value="owner">Dono</option>
+                </select>
+              </label>
+              <label>
+                Filial
+                <select
+                  name="branchId"
+                  defaultValue={
+                    branches.find((branch) => branch.isHeadquarters)?.id ?? ""
+                  }
+                >
+                  {branches.map((branch) => (
+                    <option key={branch.id} value={branch.id}>
+                      {branch.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => setEmployeeModal(false)}
+                >
+                  Cancelar
+                </button>
+                <button className="primary">Cadastrar funcionário</button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
     </>
   );
 }
