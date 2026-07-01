@@ -62,6 +62,8 @@ pnpm test
 - `POST /companies/:companyId/members`: adiciona ou altera um membro.
 - `GET /companies/:companyId/members`: lista os membros da empresa.
 - `POST /companies/:companyId/employees`: cria um funcionário, função e acesso à filial.
+- `GET /companies/:companyId/employees`: lista funcionários, filiais e status.
+- `PATCH /companies/:companyId/employees/:employeeId`: edita função, filial ou status do funcionário.
 - `POST /companies/:companyId/products`: cadastra um produto.
 - `GET /companies/:companyId/products`: lista produtos ativos.
 - `PATCH /companies/:companyId/products/:productId`: edita um produto.
@@ -106,6 +108,12 @@ estoque, compras, caixa, vendas, comprovantes, relatórios e financeiro.
 A seção **Funcionários** permite cadastrar nome, e-mail, senha inicial, função
 e filial em um modal. Ao entrar, cada funcionário é direcionado automaticamente
 para sua área principal: PDV, estoque, financeiro ou painel administrativo.
+O dono ou administrador também pode editar e inativar o acesso. A inativação é
+por empresa: ela não interfere no acesso do mesmo usuário a outra organização.
+
+O cadastro público legado em `/users` permanece desabilitado. Novos usuários
+são criados pelo onboarding inicial ou por um administrador na seção de
+funcionários.
 
 No cadastro, a empresa informa segmento (mercado, indústria, comércio,
 serviços ou outro) e porte. Esses dados formam a base para ativar fluxos

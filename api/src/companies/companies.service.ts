@@ -1,29 +1,33 @@
 import {
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
+import * as bcrypt from 'bcrypt';
+
 import { db } from '../database/drizzle';
+import { users } from '../database/schema/users.schema';
 import {
   companies,
-  companyUsers,
   companyRoles,
+  companyUsers,
   type CompanyRole,
 } from '../database/schema/companies.schema';
-import { CreateCompanyDto } from './dto/create-company.dto';
-import { users } from '../database/schema/users.schema';
-import { AddCompanyMemberDto } from './dto/add-company-member.dto';
 import { branches, branchUsers } from '../database/schema/branches.schema';
+
+import { CreateCompanyDto } from './dto/create-company.dto';
+import { AddCompanyMemberDto } from './dto/add-company-member.dto';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
-import * as bcrypt from 'bcrypt';
-import { ConflictException } from '@nestjs/common';
 import { OnboardCompanyDto } from './dto/onboard-company.dto';
+import { UpdateEmployeeDto } from './dto/update-employee.dto';
 
 @Injectable()
 export class CompaniesService {
   async onboard(dto: OnboardCompanyDto) {
     const email = dto.adminEmail.trim().toLowerCase();
+
     try {
       return await db.transaction(async (tx) => {
         const [user] = await tx
@@ -33,7 +37,12 @@ export class CompaniesService {
             email,
             passwordHash: await bcrypt.hash(dto.password, 10),
           })
-          .returning({ id: users.id, name: users.name, email: users.email });
+          .returning({
+            id: users.id,
+            name: users.name,
+            email: users.email,
+          });
+
         const [company] = await tx
           .insert(companies)
           .values({
@@ -43,9 +52,13 @@ export class CompaniesService {
             size: dto.size,
           })
           .returning();
-        await tx
-          .insert(companyUsers)
-          .values({ companyId: company.id, userId: user.id, role: 'owner' });
+
+        await tx.insert(companyUsers).values({
+          companyId: company.id,
+          userId: user.id,
+          role: 'owner',
+        });
+
         const [headquarters] = await tx
           .insert(branches)
           .values({
@@ -55,9 +68,12 @@ export class CompaniesService {
             isHeadquarters: true,
           })
           .returning();
-        await tx
-          .insert(branchUsers)
-          .values({ branchId: headquarters.id, userId: user.id });
+
+        await tx.insert(branchUsers).values({
+          branchId: headquarters.id,
+          userId: user.id,
+        });
+
         return {
           user,
           company: { ...company, role: 'owner' as const },
@@ -70,11 +86,14 @@ export class CompaniesService {
         error &&
         'code' in error &&
         error.code === '23505'
-      )
+      ) {
         throw new ConflictException('E-mail ou documento já cadastrado');
+      }
+
       throw error;
     }
   }
+
   async create(userId: string, dto: CreateCompanyDto) {
     return db.transaction(async (tx) => {
       const [company] = await tx
@@ -102,9 +121,11 @@ export class CompaniesService {
           isHeadquarters: true,
         })
         .returning({ id: branches.id });
-      await tx
-        .insert(branchUsers)
-        .values({ branchId: headquarters.id, userId });
+
+      await tx.insert(branchUsers).values({
+        branchId: headquarters.id,
+        userId,
+      });
 
       return { ...company, role: 'owner' as const };
     });
@@ -124,7 +145,9 @@ export class CompaniesService {
       })
       .from(companyUsers)
       .innerJoin(companies, eq(companyUsers.companyId, companies.id))
-      .where(eq(companyUsers.userId, userId));
+      .where(
+        and(eq(companyUsers.userId, userId), eq(companyUsers.isActive, true)),
+      );
   }
 
   async addMember(
@@ -186,18 +209,57 @@ export class CompaniesService {
 
   async findMembers(companyId: string, userId: string) {
     await this.assertRole(companyId, userId, ['owner', 'admin']);
-
-    return db
+    const rows = await db
       .select({
         id: users.id,
         name: users.name,
         email: users.email,
         role: companyUsers.role,
+        isActive: companyUsers.isActive,
+        branchId: branches.id,
+        branchName: branches.name,
         createdAt: companyUsers.createdAt,
       })
       .from(companyUsers)
       .innerJoin(users, eq(companyUsers.userId, users.id))
+      .leftJoin(branchUsers, eq(branchUsers.userId, users.id))
+      .leftJoin(
+        branches,
+        and(
+          eq(branchUsers.branchId, branches.id),
+          eq(branches.companyId, companyId),
+        ),
+      )
       .where(eq(companyUsers.companyId, companyId));
+    const grouped = new Map<
+      string,
+      Omit<(typeof rows)[number], 'branchId' | 'branchName'> & {
+        branches: Array<{ id: string; name: string }>;
+      }
+    >();
+    for (const row of rows) {
+      const current = grouped.get(row.id) ?? {
+        id: row.id,
+        name: row.name,
+        email: row.email,
+        role: row.role,
+        isActive: row.isActive,
+        createdAt: row.createdAt,
+        branches: [],
+      };
+      if (
+        row.branchId &&
+        row.branchName &&
+        !current.branches.some((branch) => branch.id === row.branchId)
+      )
+        current.branches.push({ id: row.branchId, name: row.branchName });
+      grouped.set(row.id, current);
+    }
+    return [...grouped.values()];
+  }
+
+  async findEmployees(companyId: string, userId: string) {
+    return this.findMembers(companyId, userId);
   }
 
   async createEmployee(
@@ -209,16 +271,21 @@ export class CompaniesService {
       'owner',
       'admin',
     ]);
-    if (dto.role === 'owner' && actingRole !== 'owner')
+
+    if (dto.role === 'owner' && actingRole !== 'owner') {
       throw new ForbiddenException(
         'Somente o dono pode criar outro proprietário',
       );
+    }
+
     const email = dto.email.trim().toLowerCase();
+
     return db.transaction(async (tx) => {
       let [user] = await tx
         .select({ id: users.id, name: users.name, email: users.email })
         .from(users)
         .where(eq(users.email, email));
+
       if (!user) {
         const [created] = await tx
           .insert(users)
@@ -227,7 +294,12 @@ export class CompaniesService {
             email,
             passwordHash: await bcrypt.hash(dto.password, 10),
           })
-          .returning({ id: users.id, name: users.name, email: users.email });
+          .returning({
+            id: users.id,
+            name: users.name,
+            email: users.email,
+          });
+
         user = created;
       } else {
         const [membership] = await tx
@@ -239,12 +311,18 @@ export class CompaniesService {
               eq(companyUsers.userId, user.id),
             ),
           );
-        if (membership)
+
+        if (membership) {
           throw new ConflictException('Este usuário já faz parte da empresa');
+        }
       }
-      await tx
-        .insert(companyUsers)
-        .values({ companyId, userId: user.id, role: dto.role });
+
+      await tx.insert(companyUsers).values({
+        companyId,
+        userId: user.id,
+        role: dto.role,
+      });
+
       const branchId =
         dto.branchId ??
         (
@@ -258,6 +336,7 @@ export class CompaniesService {
               ),
             )
         )[0]?.id;
+
       if (branchId) {
         const [branch] = await tx
           .select({ id: branches.id })
@@ -265,13 +344,107 @@ export class CompaniesService {
           .where(
             and(eq(branches.id, branchId), eq(branches.companyId, companyId)),
           );
-        if (!branch) throw new NotFoundException('Filial não encontrada');
+
+        if (!branch) {
+          throw new NotFoundException('Filial não encontrada');
+        }
+
         await tx
           .insert(branchUsers)
           .values({ branchId, userId: user.id })
           .onConflictDoNothing();
       }
+
       return { ...user, role: dto.role, branchId };
+    });
+  }
+
+  async updateEmployee(
+    companyId: string,
+    employeeId: string,
+    actingUserId: string,
+    dto: UpdateEmployeeDto,
+  ) {
+    const actingRole = await this.assertRole(companyId, actingUserId, [
+      'owner',
+      'admin',
+    ]);
+    const [membership] = await db
+      .select()
+      .from(companyUsers)
+      .where(
+        and(
+          eq(companyUsers.companyId, companyId),
+          eq(companyUsers.userId, employeeId),
+        ),
+      );
+    if (!membership) throw new NotFoundException('Funcionário não encontrado');
+    if (membership.role === 'owner' && actingRole !== 'owner')
+      throw new ForbiddenException(
+        'Somente o dono pode alterar outro proprietário',
+      );
+    if (
+      employeeId === actingUserId &&
+      (dto.isActive === false || (dto.role && dto.role !== actingRole))
+    )
+      throw new ForbiddenException(
+        'Você não pode remover ou alterar o próprio acesso',
+      );
+    if (dto.role === 'owner' && actingRole !== 'owner')
+      throw new ForbiddenException('Somente o dono pode atribuir esse perfil');
+    return db.transaction(async (tx) => {
+      if (dto.name)
+        await tx
+          .update(users)
+          .set({ name: dto.name.trim(), updatedAt: new Date() })
+          .where(eq(users.id, employeeId));
+      if (dto.role !== undefined || dto.isActive !== undefined)
+        await tx
+          .update(companyUsers)
+          .set({
+            ...(dto.role !== undefined ? { role: dto.role } : {}),
+            ...(dto.isActive !== undefined ? { isActive: dto.isActive } : {}),
+          })
+          .where(
+            and(
+              eq(companyUsers.companyId, companyId),
+              eq(companyUsers.userId, employeeId),
+            ),
+          );
+      if (dto.branchId) {
+        const [branch] = await tx
+          .select({ id: branches.id })
+          .from(branches)
+          .where(
+            and(
+              eq(branches.id, dto.branchId),
+              eq(branches.companyId, companyId),
+              eq(branches.isActive, true),
+            ),
+          );
+        if (!branch) throw new NotFoundException('Filial não encontrada');
+        const companyBranchIds = tx
+          .select({ id: branches.id })
+          .from(branches)
+          .where(eq(branches.companyId, companyId));
+        await tx
+          .delete(branchUsers)
+          .where(
+            and(
+              eq(branchUsers.userId, employeeId),
+              inArray(branchUsers.branchId, companyBranchIds),
+            ),
+          );
+        await tx
+          .insert(branchUsers)
+          .values({ branchId: branch.id, userId: employeeId });
+      }
+      return {
+        id: employeeId,
+        role: dto.role ?? membership.role,
+        isActive: dto.isActive ?? membership.isActive,
+        branchId: dto.branchId,
+      };
     });
   }
 
@@ -287,6 +460,7 @@ export class CompaniesService {
         and(
           eq(companyUsers.companyId, companyId),
           eq(companyUsers.userId, userId),
+          eq(companyUsers.isActive, true),
         ),
       );
 

@@ -1,4 +1,5 @@
 import {
+  boolean,
   pgEnum,
   pgTable,
   primaryKey,
@@ -48,6 +49,7 @@ export const companyUsers = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     role: companyRoleEnum('role').default('cashier').notNull(),
+    isActive: boolean('is_active').default(true).notNull(),
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
   (table) => [primaryKey({ columns: [table.companyId, table.userId] })],

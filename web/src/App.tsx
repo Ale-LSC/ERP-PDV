@@ -24,6 +24,14 @@ type Branch = {
   address: string | null;
   isHeadquarters: boolean;
 };
+type Employee = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  isActive: boolean;
+  branches: Array<{ id: string; name: string }>;
+};
 type Product = {
   id: string;
   name: string;
@@ -167,7 +175,11 @@ type Purchase = {
   createdAt: string;
 };
 
-async function api<T>(path: string, options: RequestInit = {}, token?: string) {
+async function api<T>(
+  path: string,
+  options: RequestInit = {},
+  token?: string,
+): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, {
     ...options,
     headers: {
@@ -190,7 +202,13 @@ async function api<T>(path: string, options: RequestInit = {}, token?: string) {
     throw new Error(message ?? "Não foi possível concluir a operação.");
   }
 
-  return response.json() as Promise<T>;
+  const text = await response.text();
+
+  if (!text) {
+    return null as T;
+  }
+
+  return JSON.parse(text) as T;
 }
 
 function App() {
@@ -221,11 +239,10 @@ function App() {
     if (!token || !companyId) return;
     void api<Branch[]>(`/companies/${companyId}/branches`, {}, token)
       .then((items) => {
+        const savedBranchId = localStorage.getItem("erp-branch");
         const selected =
-          items.find(
-            (item) => item.id === localStorage.getItem("erp-branch"),
-          ) ??
-          items.find((item) => item.isHeadquarters) ??
+          items.find((item: Branch) => item.id === savedBranchId) ??
+          items.find((item: Branch) => item.isHeadquarters) ??
           items[0];
         setBranches(items);
         setBranchId(selected?.id ?? "");
@@ -480,19 +497,14 @@ function App() {
 }
 
 function Team({ token, companyId }: { token: string; companyId: string }) {
-  const [members, setMembers] = useState<
-    Array<{ id: string; name: string; email: string; role: string }>
-  >([]);
+  const [members, setMembers] = useState<Employee[]>([]);
   const [feedback, setFeedback] = useState("");
   const [branches, setBranches] = useState<Branch[]>([]);
   const [employeeModal, setEmployeeModal] = useState(false);
+  const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const load = useCallback(async () => {
     const [memberRows, branchRows] = await Promise.all([
-      api<Array<{ id: string; name: string; email: string; role: string }>>(
-        `/companies/${companyId}/employees`,
-        {},
-        token,
-      ),
+      api<Employee[]>(`/companies/${companyId}/employees`, {}, token),
       api<Branch[]>(`/companies/${companyId}/branches`, {}, token),
     ]);
     setMembers(memberRows);
@@ -508,22 +520,33 @@ function Team({ token, companyId }: { token: string; companyId: string }) {
     const data = new FormData(form);
     try {
       await api(
-        `/companies/${companyId}/members`,
+        editingEmployee
+          ? `/companies/${companyId}/employees/${editingEmployee.id}`
+          : `/companies/${companyId}/employees`,
         {
-          method: "POST",
+          method: editingEmployee ? "PATCH" : "POST",
           body: JSON.stringify({
             name: data.get("name"),
-            email: data.get("email"),
-            password: data.get("password"),
+            ...(editingEmployee
+              ? {}
+              : { email: data.get("email"), password: data.get("password") }),
             role: data.get("role"),
             branchId: data.get("branchId") || undefined,
+            ...(editingEmployee
+              ? { isActive: data.get("isActive") === "true" }
+              : {}),
           }),
         },
         token,
       );
       form.reset();
       setEmployeeModal(false);
-      setFeedback("Funcionário cadastrado e acesso configurado.");
+      setEditingEmployee(null);
+      setFeedback(
+        editingEmployee
+          ? "Funcionário atualizado."
+          : "Funcionário cadastrado e acesso configurado.",
+      );
       await load();
     } catch (reason) {
       setFeedback(
@@ -572,7 +595,13 @@ function Team({ token, companyId }: { token: string; companyId: string }) {
           <h1>Funcionários</h1>
           <p>Cadastre a equipe e defina a área inicial de cada pessoa.</p>
         </div>
-        <button className="primary" onClick={() => setEmployeeModal(true)}>
+        <button
+          className="primary"
+          onClick={() => {
+            setEditingEmployee(null);
+            setEmployeeModal(true);
+          }}
+        >
           + Novo funcionário
         </button>
       </section>
@@ -611,6 +640,9 @@ function Team({ token, companyId }: { token: string; companyId: string }) {
               <th>Nome</th>
               <th>E-mail</th>
               <th>Função</th>
+              <th>Filial</th>
+              <th>Status</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -619,6 +651,28 @@ function Team({ token, companyId }: { token: string; companyId: string }) {
                 <td>{member.name}</td>
                 <td>{member.email}</td>
                 <td>{labels[member.role] ?? member.role}</td>
+                <td>
+                  {member.branches.map((branch) => branch.name).join(", ") ||
+                    "—"}
+                </td>
+                <td>
+                  <span
+                    className={member.isActive ? "sale-ok" : "sale-cancelled"}
+                  >
+                    {member.isActive ? "Ativo" : "Inativo"}
+                  </span>
+                </td>
+                <td>
+                  <button
+                    className="table-action"
+                    onClick={() => {
+                      setEditingEmployee(member);
+                      setEmployeeModal(true);
+                    }}
+                  >
+                    Editar
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -626,15 +680,27 @@ function Team({ token, companyId }: { token: string; companyId: string }) {
       </section>
       {employeeModal && (
         <div className="modal-overlay" role="dialog" aria-modal="true">
-          <section className="modal-card">
+          <section
+            className="modal-card"
+            key={editingEmployee?.id ?? "new-employee"}
+          >
             <div className="modal-heading">
               <div>
-                <small>NOVO ACESSO</small>
-                <h2>Cadastrar funcionário</h2>
+                <small>
+                  {editingEmployee ? "EDITAR ACESSO" : "NOVO ACESSO"}
+                </small>
+                <h2>
+                  {editingEmployee
+                    ? editingEmployee.name
+                    : "Cadastrar funcionário"}
+                </h2>
               </div>
               <button
                 className="modal-close"
-                onClick={() => setEmployeeModal(false)}
+                onClick={() => {
+                  setEmployeeModal(false);
+                  setEditingEmployee(null);
+                }}
               >
                 ×
               </button>
@@ -645,19 +711,37 @@ function Team({ token, companyId }: { token: string; companyId: string }) {
             >
               <label>
                 Nome
-                <input name="name" required minLength={2} autoFocus />
+                <input
+                  name="name"
+                  required
+                  minLength={2}
+                  autoFocus
+                  defaultValue={editingEmployee?.name}
+                />
               </label>
-              <label>
-                E-mail
-                <input name="email" type="email" required />
-              </label>
-              <label>
-                Senha inicial
-                <input name="password" type="password" required minLength={8} />
-              </label>
+              {!editingEmployee && (
+                <label>
+                  E-mail
+                  <input name="email" type="email" required />
+                </label>
+              )}
+              {!editingEmployee && (
+                <label>
+                  Senha inicial
+                  <input
+                    name="password"
+                    type="password"
+                    required
+                    minLength={8}
+                  />
+                </label>
+              )}
               <label>
                 Função
-                <select name="role" defaultValue="cashier">
+                <select
+                  name="role"
+                  defaultValue={editingEmployee?.role ?? "cashier"}
+                >
                   <option value="admin">Administrador</option>
                   <option value="finance">Financeiro</option>
                   <option value="stock">Estoque</option>
@@ -670,7 +754,9 @@ function Team({ token, companyId }: { token: string; companyId: string }) {
                 <select
                   name="branchId"
                   defaultValue={
-                    branches.find((branch) => branch.isHeadquarters)?.id ?? ""
+                    editingEmployee?.branches[0]?.id ??
+                    branches.find((branch) => branch.isHeadquarters)?.id ??
+                    ""
                   }
                 >
                   {branches.map((branch) => (
@@ -680,15 +766,34 @@ function Team({ token, companyId }: { token: string; companyId: string }) {
                   ))}
                 </select>
               </label>
+              {editingEmployee && (
+                <label>
+                  Status
+                  <select
+                    name="isActive"
+                    defaultValue={String(editingEmployee.isActive)}
+                  >
+                    <option value="true">Ativo</option>
+                    <option value="false">Inativo</option>
+                  </select>
+                </label>
+              )}
               <div className="modal-actions">
                 <button
                   type="button"
                   className="secondary"
-                  onClick={() => setEmployeeModal(false)}
+                  onClick={() => {
+                    setEmployeeModal(false);
+                    setEditingEmployee(null);
+                  }}
                 >
                   Cancelar
                 </button>
-                <button className="primary">Cadastrar funcionário</button>
+                <button className="primary">
+                  {editingEmployee
+                    ? "Salvar alterações"
+                    : "Cadastrar funcionário"}
+                </button>
               </div>
             </form>
           </section>

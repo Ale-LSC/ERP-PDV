@@ -4,6 +4,7 @@ import {
   Get,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Req,
   UseGuards,
@@ -14,6 +15,7 @@ import { CompaniesService } from './companies.service';
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { AddCompanyMemberDto } from './dto/add-company-member.dto';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
+import { UpdateEmployeeDto } from './dto/update-employee.dto';
 
 @UseGuards(JwtAuthGuard)
 @Controller('companies')
@@ -47,6 +49,14 @@ export class CompaniesController {
     return this.companiesService.findMembers(companyId, request.user.sub);
   }
 
+  @Get(':companyId/employees')
+  findEmployees(
+    @Param('companyId', ParseUUIDPipe) companyId: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.companiesService.findEmployees(companyId, request.user.sub);
+  }
+
   @Post(':companyId/employees')
   createEmployee(
     @Param('companyId', ParseUUIDPipe) companyId: string,
@@ -55,6 +65,21 @@ export class CompaniesController {
   ) {
     return this.companiesService.createEmployee(
       companyId,
+      request.user.sub,
+      dto,
+    );
+  }
+
+  @Patch(':companyId/employees/:employeeId')
+  updateEmployee(
+    @Param('companyId', ParseUUIDPipe) companyId: string,
+    @Param('employeeId', ParseUUIDPipe) employeeId: string,
+    @Req() request: AuthenticatedRequest,
+    @Body() dto: UpdateEmployeeDto,
+  ) {
+    return this.companiesService.updateEmployee(
+      companyId,
+      employeeId,
       request.user.sub,
       dto,
     );
