@@ -11,10 +11,13 @@ import {
 } from '@nestjs/common';
 import type { AuthenticatedRequest } from '../auth/auth.types';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CompanyModuleGuard } from '../companies/company-module.guard';
+import { RequireCompanyModule } from '../companies/require-company-module.decorator';
 import { CreateStockMovementDto } from './dto/create-stock-movement.dto';
 import { StockService } from './stock.service';
 
-@UseGuards(JwtAuthGuard)
+@RequireCompanyModule('inventory')
+@UseGuards(JwtAuthGuard, CompanyModuleGuard)
 @Controller('companies/:companyId/stock-movements')
 export class StockController {
   constructor(private readonly stockService: StockService) {}

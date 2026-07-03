@@ -11,8 +11,10 @@ import { db } from '../database/drizzle';
 import { users } from '../database/schema/users.schema';
 import {
   companies,
+  companyEnabledModules,
   companyRoles,
   companyUsers,
+  type CompanyModule,
   type CompanyRole,
 } from '../database/schema/companies.schema';
 import { branches, branchUsers } from '../database/schema/branches.schema';
@@ -22,6 +24,7 @@ import { AddCompanyMemberDto } from './dto/add-company-member.dto';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { OnboardCompanyDto } from './dto/onboard-company.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
+import { defaultModulesForSegment } from './company-modules';
 
 @Injectable()
 export class CompaniesService {
@@ -59,6 +62,14 @@ export class CompaniesService {
           role: 'owner',
         });
 
+        const modules = defaultModulesForSegment(company.segment);
+        await tx.insert(companyEnabledModules).values(
+          modules.map((module) => ({
+            companyId: company.id,
+            module,
+          })),
+        );
+
         const [headquarters] = await tx
           .insert(branches)
           .values({
@@ -76,7 +87,7 @@ export class CompaniesService {
 
         return {
           user,
-          company: { ...company, role: 'owner' as const },
+          company: { ...company, role: 'owner' as const, modules },
           branch: headquarters,
         };
       });
@@ -112,6 +123,14 @@ export class CompaniesService {
         role: 'owner',
       });
 
+      const modules = defaultModulesForSegment(company.segment);
+      await tx.insert(companyEnabledModules).values(
+        modules.map((module) => ({
+          companyId: company.id,
+          module,
+        })),
+      );
+
       const [headquarters] = await tx
         .insert(branches)
         .values({
@@ -127,12 +146,12 @@ export class CompaniesService {
         userId,
       });
 
-      return { ...company, role: 'owner' as const };
+      return { ...company, role: 'owner' as const, modules };
     });
   }
 
-  findAllForUser(userId: string) {
-    return db
+  async findAllForUser(userId: string) {
+    const rows = await db
       .select({
         id: companies.id,
         name: companies.name,
@@ -148,6 +167,37 @@ export class CompaniesService {
       .where(
         and(eq(companyUsers.userId, userId), eq(companyUsers.isActive, true)),
       );
+
+    const enabledModules = rows.length
+      ? await db
+          .select({
+            companyId: companyEnabledModules.companyId,
+            module: companyEnabledModules.module,
+          })
+          .from(companyEnabledModules)
+          .where(
+            and(
+              inArray(
+                companyEnabledModules.companyId,
+                rows.map((row) => row.id),
+              ),
+              eq(companyEnabledModules.isEnabled, true),
+            ),
+          )
+      : [];
+
+    const modulesByCompany = new Map<string, CompanyModule[]>();
+    for (const item of enabledModules) {
+      const modules = modulesByCompany.get(item.companyId) ?? [];
+      modules.push(item.module);
+      modulesByCompany.set(item.companyId, modules);
+    }
+
+    return rows.map((row) => ({
+      ...row,
+      modules:
+        modulesByCompany.get(row.id) ?? defaultModulesForSegment(row.segment),
+    }));
   }
 
   async addMember(
@@ -469,5 +519,55 @@ export class CompaniesService {
     }
 
     return membership.role;
+  }
+
+  async hasEnabledModule(
+    companyId: string,
+    userId: string,
+    module: CompanyModule,
+  ) {
+    await this.assertRole(companyId, userId);
+    const [enabledModule] = await db
+      .select({ module: companyEnabledModules.module })
+      .from(companyEnabledModules)
+      .where(
+        and(
+          eq(companyEnabledModules.companyId, companyId),
+          eq(companyEnabledModules.module, module),
+          eq(companyEnabledModules.isEnabled, true),
+        ),
+      );
+    return Boolean(enabledModule);
+  }
+
+  async getModules(companyId: string, userId: string) {
+    await this.assertRole(companyId, userId);
+    return db
+      .select({
+        module: companyEnabledModules.module,
+        isEnabled: companyEnabledModules.isEnabled,
+        config: companyEnabledModules.config,
+      })
+      .from(companyEnabledModules)
+      .where(eq(companyEnabledModules.companyId, companyId));
+  }
+
+  async updateModules(
+    companyId: string,
+    userId: string,
+    modules: CompanyModule[],
+  ) {
+    await this.assertRole(companyId, userId, ['owner', 'admin']);
+    await db.transaction(async (tx) => {
+      await tx
+        .delete(companyEnabledModules)
+        .where(eq(companyEnabledModules.companyId, companyId));
+      if (modules.length) {
+        await tx
+          .insert(companyEnabledModules)
+          .values(modules.map((module) => ({ companyId, module })));
+      }
+    });
+    return this.getModules(companyId, userId);
   }
 }

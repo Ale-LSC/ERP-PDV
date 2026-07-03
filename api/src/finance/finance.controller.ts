@@ -12,11 +12,14 @@ import {
 } from '@nestjs/common';
 import type { AuthenticatedRequest } from '../auth/auth.types';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CompanyModuleGuard } from '../companies/company-module.guard';
+import { RequireCompanyModule } from '../companies/require-company-module.decorator';
 import { CreateFinancialEntryDto } from './dto/create-financial-entry.dto';
 import { ListFinancialEntriesDto } from './dto/list-financial-entries.dto';
 import { FinanceService } from './finance.service';
 
-@UseGuards(JwtAuthGuard)
+@RequireCompanyModule('finance')
+@UseGuards(JwtAuthGuard, CompanyModuleGuard)
 @Controller('companies/:companyId/finance')
 export class FinanceController {
   constructor(private readonly financeService: FinanceService) {}

@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { CompaniesService } from '../companies/companies.service';
 import { db } from '../database/drizzle';
 import { cashSessions } from '../database/schema/cash.schema';
@@ -78,7 +78,14 @@ export class SalesService {
           id: products.id,
           name: products.name,
           sku: products.sku,
-          salePrice: products.salePrice,
+          salePrice: sql<string>`coalesce((
+            select p.promotional_price from promotions p
+            where p.company_id = ${companyId}
+              and p.product_id = ${products.id}
+              and p.is_active = true
+              and p.starts_at <= now() and p.ends_at > now()
+            limit 1
+          ), ${products.salePrice})`,
           stockQuantity: branchStocks.quantity,
         })
         .from(products)

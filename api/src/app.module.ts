@@ -18,6 +18,10 @@ import { SuppliersModule } from './suppliers/suppliers.module';
 import { PurchasesModule } from './purchases/purchases.module';
 import { ReplenishmentModule } from './replenishment/replenishment.module';
 import { BranchesModule } from './branches/branches.module';
+import { ModuleRecordsModule } from './module-records/module-records.module';
+import { CommercialModule } from './commercial/commercial.module';
+import { ProductionModule } from './production/production.module';
+import { ServicesModule } from './services/services.module';
 
 @Module({
   imports: [
@@ -40,6 +44,10 @@ import { BranchesModule } from './branches/branches.module';
     PurchasesModule,
     ReplenishmentModule,
     BranchesModule,
+    ModuleRecordsModule,
+    CommercialModule,
+    ProductionModule,
+    ServicesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

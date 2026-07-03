@@ -12,9 +12,12 @@ import {
 } from '@nestjs/common';
 import type { AuthenticatedRequest } from '../auth/auth.types';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CompanyModuleGuard } from '../companies/company-module.guard';
+import { RequireCompanyModule } from '../companies/require-company-module.decorator';
 import { CreateReplenishmentDto } from './dto/create-replenishment.dto';
 import { ReplenishmentService } from './replenishment.service';
-@UseGuards(JwtAuthGuard)
+@RequireCompanyModule('inventory')
+@UseGuards(JwtAuthGuard, CompanyModuleGuard)
 @Controller('companies/:companyId/replenishment-requests')
 export class ReplenishmentController {
   constructor(private readonly service: ReplenishmentService) {}

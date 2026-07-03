@@ -1,5 +1,6 @@
 import {
   boolean,
+  jsonb,
   pgEnum,
   pgTable,
   primaryKey,
@@ -24,10 +25,33 @@ export const companySegments = [
   'other',
 ] as const;
 export const companySizes = ['small', 'medium', 'large'] as const;
+export const companyModules = [
+  'dashboard',
+  'team',
+  'customers',
+  'products',
+  'inventory',
+  'purchases',
+  'finance',
+  'pdv',
+  'cash',
+  'reports',
+  'promotions',
+  'fiscal',
+  'expiry_control',
+  'production',
+  'bom',
+  'mrp',
+  'quality',
+  'service_orders',
+  'appointments',
+  'contracts',
+] as const;
 
 export const companyRoleEnum = pgEnum('company_role', companyRoles);
 export const companySegmentEnum = pgEnum('company_segment', companySegments);
 export const companySizeEnum = pgEnum('company_size', companySizes);
+export const companyModuleEnum = pgEnum('company_module', companyModules);
 
 export const companies = pgTable('companies', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -55,6 +79,22 @@ export const companyUsers = pgTable(
   (table) => [primaryKey({ columns: [table.companyId, table.userId] })],
 );
 
+export const companyEnabledModules = pgTable(
+  'company_enabled_modules',
+  {
+    companyId: uuid('company_id')
+      .notNull()
+      .references(() => companies.id, { onDelete: 'cascade' }),
+    module: companyModuleEnum('module').notNull(),
+    isEnabled: boolean('is_enabled').default(true).notNull(),
+    config: jsonb('config').$type<Record<string, unknown>>().default({}),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.companyId, table.module] })],
+);
+
 export type CompanyRole = (typeof companyRoles)[number];
 export type CompanySegment = (typeof companySegments)[number];
 export type CompanySize = (typeof companySizes)[number];
+export type CompanyModule = (typeof companyModules)[number];

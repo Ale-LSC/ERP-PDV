@@ -16,8 +16,11 @@ import { CreateCompanyDto } from './dto/create-company.dto';
 import { AddCompanyMemberDto } from './dto/add-company-member.dto';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
+import { UpdateCompanyModulesDto } from './dto/update-company-modules.dto';
+import { CompanyModuleGuard } from './company-module.guard';
+import { RequireCompanyModule } from './require-company-module.decorator';
 
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, CompanyModuleGuard)
 @Controller('companies')
 export class CompaniesController {
   constructor(private readonly companiesService: CompaniesService) {}
@@ -32,7 +35,29 @@ export class CompaniesController {
     return this.companiesService.findAllForUser(request.user.sub);
   }
 
+  @Get(':companyId/modules')
+  getModules(
+    @Param('companyId', ParseUUIDPipe) companyId: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.companiesService.getModules(companyId, request.user.sub);
+  }
+
+  @Patch(':companyId/modules')
+  updateModules(
+    @Param('companyId', ParseUUIDPipe) companyId: string,
+    @Req() request: AuthenticatedRequest,
+    @Body() dto: UpdateCompanyModulesDto,
+  ) {
+    return this.companiesService.updateModules(
+      companyId,
+      request.user.sub,
+      dto.modules,
+    );
+  }
+
   @Post(':companyId/members')
+  @RequireCompanyModule('team')
   addMember(
     @Param('companyId', ParseUUIDPipe) companyId: string,
     @Req() request: AuthenticatedRequest,
@@ -42,6 +67,7 @@ export class CompaniesController {
   }
 
   @Get(':companyId/members')
+  @RequireCompanyModule('team')
   findMembers(
     @Param('companyId', ParseUUIDPipe) companyId: string,
     @Req() request: AuthenticatedRequest,
@@ -50,6 +76,7 @@ export class CompaniesController {
   }
 
   @Get(':companyId/employees')
+  @RequireCompanyModule('team')
   findEmployees(
     @Param('companyId', ParseUUIDPipe) companyId: string,
     @Req() request: AuthenticatedRequest,
@@ -58,6 +85,7 @@ export class CompaniesController {
   }
 
   @Post(':companyId/employees')
+  @RequireCompanyModule('team')
   createEmployee(
     @Param('companyId', ParseUUIDPipe) companyId: string,
     @Req() request: AuthenticatedRequest,
@@ -71,6 +99,7 @@ export class CompaniesController {
   }
 
   @Patch(':companyId/employees/:employeeId')
+  @RequireCompanyModule('team')
   updateEmployee(
     @Param('companyId', ParseUUIDPipe) companyId: string,
     @Param('employeeId', ParseUUIDPipe) employeeId: string,

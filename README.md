@@ -119,6 +119,36 @@ No cadastro, a empresa informa segmento (mercado, indústria, comércio,
 serviços ou outro) e porte. Esses dados formam a base para ativar fluxos
 especializados sem misturar regras de segmentos diferentes.
 
+### Módulos por segmento
+
+Ao criar uma empresa, o sistema habilita automaticamente módulos operacionais
+de acordo com o segmento escolhido. Esses módulos controlam os menus e criam a
+base para evoluir o produto sem espalhar regras específicas de segmento pela
+aplicação.
+
+- `market`: ERP + PDV, caixa, promoções, fiscal e controle de validade/lotes.
+- `industry`: ERP industrial com produção, ficha técnica, MRP, qualidade e fiscal.
+- `retail`: ERP comercial com PDV, caixa, promoções e fiscal.
+- `services`: clientes, financeiro, ordens de serviço, agenda e contratos.
+- `other`: núcleo ERP comum com produtos, estoque, compras, financeiro e relatórios.
+
+Os módulos habilitados ficam em `company_enabled_modules`. Empresas antigas são
+preenchidas pela migração conforme o segmento já cadastrado.
+
+Proprietários e administradores podem alterar os módulos pela tela
+**Configuração**. A API também valida o módulo em cada rota operacional; ocultar
+o menu não é usado como mecanismo de segurança.
+
+Os módulos especializados usam `module_records` para registrar atividades com
+título, descrição, prazo e status. Essa base atende promoções, fiscal, validade,
+produção, ficha técnica, MRP, qualidade, ordens de serviço, agenda e contratos,
+mantendo os dados isolados por empresa e módulo.
+
+Produção possui fichas técnicas, cálculo MRP por filial e ordens que movimentam
+insumos e produtos acabados de forma transacional. Para empresas de serviços,
+ordens concluídas geram contas a receber, a agenda impede choque de horários e
+contratos armazenam vigência, valor e ciclo de cobrança.
+
 O operador do PDV pode solicitar reposição de itens com estoque baixo. A equipe
 de estoque acompanha e marca cada solicitação como atendida.
 
