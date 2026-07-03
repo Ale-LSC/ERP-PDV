@@ -115,6 +115,7 @@ export const serviceContracts = pgTable(
     amount: numeric('amount', { precision: 12, scale: 2 }).notNull(),
     billingCycle: contractBillingCycleEnum('billing_cycle').notNull(),
     startsOn: date('starts_on').notNull(),
+    nextBillingOn: date('next_billing_on').notNull(),
     endsOn: date('ends_on'),
     status: contractStatusEnum('status').default('draft').notNull(),
     notes: text('notes'),

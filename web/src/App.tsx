@@ -54,7 +54,27 @@ function App() {
   const [branchId, setBranchId] = useState("");
   const [section, setSection] = useState<AppSection>("dashboard");
   const [error, setError] = useState("");
+  const [pendingRequests, setPendingRequests] = useState(0);
   const selectedCompany = companies.find((item) => item.id === companyId);
+
+  useEffect(() => {
+    const start = () => setPendingRequests((current) => current + 1);
+    const end = () => setPendingRequests((current) => Math.max(0, current - 1));
+    const unauthorized = () => {
+      setToken("");
+      setCompanies([]);
+      setCompanyId("");
+      setError("Sua sessão expirou. Entre novamente.");
+    };
+    window.addEventListener("erp:request-start", start);
+    window.addEventListener("erp:request-end", end);
+    window.addEventListener("erp:unauthorized", unauthorized);
+    return () => {
+      window.removeEventListener("erp:request-start", start);
+      window.removeEventListener("erp:request-end", end);
+      window.removeEventListener("erp:unauthorized", unauthorized);
+    };
+  }, []);
 
   useEffect(() => {
     if (!token) return;
@@ -116,7 +136,13 @@ function App() {
     localStorage.removeItem("erp-branch");
   }
 
-  if (!token) return <AuthScreen onAuthenticated={authenticate} />;
+  if (!token)
+    return (
+      <>
+        {pendingRequests > 0 && <div className="global-loading" />}
+        <AuthScreen onAuthenticated={authenticate} initialError={error} />
+      </>
+    );
 
   const company = selectedCompany;
   const role = company?.role ?? "cashier";
@@ -142,6 +168,7 @@ function App() {
 
   return (
     <div className="app-shell">
+      {pendingRequests > 0 && <div className="global-loading" />}
       <aside className="sidebar">
         <div className="brand">
           <span>EP</span>

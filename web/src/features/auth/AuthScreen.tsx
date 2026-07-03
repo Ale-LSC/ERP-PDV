@@ -3,11 +3,13 @@ import { api } from "../../lib/api";
 
 export function AuthScreen({
   onAuthenticated,
+  initialError = "",
 }: {
   onAuthenticated: (token: string) => void;
+  initialError?: string;
 }) {
   const [register, setRegister] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(initialError);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

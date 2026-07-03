@@ -22,6 +22,7 @@ import { ModuleRecordsModule } from './module-records/module-records.module';
 import { CommercialModule } from './commercial/commercial.module';
 import { ProductionModule } from './production/production.module';
 import { ServicesModule } from './services/services.module';
+import { AuditModule } from './audit/audit.module';
 
 @Module({
   imports: [
@@ -48,6 +49,7 @@ import { ServicesModule } from './services/services.module';
     CommercialModule,
     ProductionModule,
     ServicesModule,
+    AuditModule,
   ],
   controllers: [AppController],
   providers: [AppService],

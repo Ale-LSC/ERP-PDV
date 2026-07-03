@@ -20,6 +20,7 @@ import {
   CreateServiceOrderDto,
 } from './dto/create-service.dto';
 import { validatePeriod } from './service-period';
+import { nextBillingDate } from './contract-billing';
 
 @Injectable()
 export class ServicesService {
@@ -220,6 +221,7 @@ export class ServicesService {
         amount: dto.amount.toFixed(2),
         billingCycle: dto.billingCycle,
         startsOn: dto.startsOn,
+        nextBillingOn: dto.startsOn,
         endsOn: dto.endsOn ?? null,
         notes: dto.notes?.trim() || null,
         createdBy: userId,
@@ -237,6 +239,7 @@ export class ServicesService {
         amount: serviceContracts.amount,
         billingCycle: serviceContracts.billingCycle,
         startsOn: serviceContracts.startsOn,
+        nextBillingOn: serviceContracts.nextBillingOn,
         endsOn: serviceContracts.endsOn,
         status: serviceContracts.status,
       })
@@ -273,6 +276,62 @@ export class ServicesService {
       .returning();
     if (!item) throw new NotFoundException('Contrato não encontrado');
     return item;
+  }
+
+  async generateContractBilling(
+    companyId: string,
+    userId: string,
+    through: string,
+  ) {
+    await this.companies.assertRole(companyId, userId, [
+      'owner',
+      'admin',
+      'finance',
+    ]);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(through))
+      throw new BadRequestException('Data de cobrança inválida');
+    return db.transaction(async (tx) => {
+      const contracts = await tx
+        .select()
+        .from(serviceContracts)
+        .where(
+          and(
+            eq(serviceContracts.companyId, companyId),
+            eq(serviceContracts.status, 'active'),
+          ),
+        )
+        .for('update');
+      let generated = 0;
+      for (const contract of contracts) {
+        let dueDate = contract.nextBillingOn;
+        let contractEntries = 0;
+        while (
+          dueDate <= through &&
+          (!contract.endsOn || dueDate <= contract.endsOn) &&
+          contractEntries < 120
+        ) {
+          await tx.insert(financialEntries).values({
+            companyId,
+            type: 'receivable',
+            description: `Contrato: ${contract.title}`,
+            category: 'Contratos',
+            amount: contract.amount,
+            dueDate,
+            createdBy: userId,
+          });
+          dueDate = nextBillingDate(dueDate, contract.billingCycle);
+          generated += 1;
+          contractEntries += 1;
+        }
+        if (dueDate !== contract.nextBillingOn) {
+          await tx
+            .update(serviceContracts)
+            .set({ nextBillingOn: dueDate, updatedAt: new Date() })
+            .where(eq(serviceContracts.id, contract.id));
+        }
+      }
+      return { generated };
+    });
   }
   private async assertCustomer(companyId: string, customerId: string) {
     const [customer] = await db

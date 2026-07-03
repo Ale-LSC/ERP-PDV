@@ -8,6 +8,24 @@
   --paper: #070c14;
   color-scheme: dark;
 }
+.global-loading {
+  position: fixed;
+  z-index: 9999;
+  top: 0;
+  left: 0;
+  height: 3px;
+  width: 100%;
+  background: linear-gradient(90deg, transparent, #168cff, transparent);
+  animation: loading-slide 1s linear infinite;
+}
+@keyframes loading-slide {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
 * {
   box-sizing: border-box;
 }

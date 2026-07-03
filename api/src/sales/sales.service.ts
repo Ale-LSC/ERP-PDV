@@ -4,12 +4,16 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, gte, inArray, sql } from 'drizzle-orm';
 import { CompaniesService } from '../companies/companies.service';
 import { db } from '../database/drizzle';
 import { cashSessions } from '../database/schema/cash.schema';
 import { products } from '../database/schema/products.schema';
 import { customers } from '../database/schema/customers.schema';
+import {
+  productLots,
+  saleLotAllocations,
+} from '../database/schema/commercial.schema';
 import {
   saleItems,
   salePayments,
@@ -24,6 +28,7 @@ import {
   centsToDecimal,
   toCents,
 } from './sale-calculation';
+import { allocateLotsFefo } from '../commercial/lot-allocation';
 
 @Injectable()
 export class SalesService {
@@ -126,6 +131,35 @@ export class SalesService {
 
         return { product, quantity: item.quantity };
       });
+      const lotAllocations: Array<{ id: string; quantity: number }> = [];
+      const today = new Date().toISOString().slice(0, 10);
+      for (const { product, quantity } of calculatedItems) {
+        const lots = await tx
+          .select({
+            id: productLots.id,
+            quantity: productLots.quantity,
+            expiresAt: productLots.expiresAt,
+          })
+          .from(productLots)
+          .where(
+            and(
+              eq(productLots.branchId, cashSession.branchId),
+              eq(productLots.productId, product.id),
+              gt(productLots.quantity, '0'),
+            ),
+          )
+          .orderBy(asc(productLots.expiresAt))
+          .for('update');
+        if (!lots.length) continue;
+
+        try {
+          lotAllocations.push(...allocateLotsFefo(lots, quantity, today));
+        } catch {
+          throw new BadRequestException(
+            `Lotes válidos insuficientes: ${product.name}`,
+          );
+        }
+      }
       const totals = calculateSaleTotals(
         calculatedItems.map(({ product, quantity }) => ({
           unitPrice: product.salePrice,
@@ -204,6 +238,31 @@ export class SalesService {
           ...payment,
         })),
       );
+
+      if (lotAllocations.length) {
+        await tx.insert(saleLotAllocations).values(
+          lotAllocations.map((allocation) => ({
+            saleId: sale.id,
+            lotId: allocation.id,
+            quantity: allocation.quantity.toFixed(3),
+          })),
+        );
+      }
+
+      for (const allocation of lotAllocations) {
+        await tx
+          .update(productLots)
+          .set({
+            quantity: sql`${productLots.quantity} - ${allocation.quantity}`,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(productLots.id, allocation.id),
+              gte(productLots.quantity, allocation.quantity.toString()),
+            ),
+          );
+      }
 
       for (const { product, quantity } of calculatedItems) {
         const previousQuantity = Number(product.stockQuantity);
@@ -305,6 +364,20 @@ export class SalesService {
       const productById = new Map(
         selectedProducts.map((product) => [product.id, product]),
       );
+
+      const allocations = await tx
+        .select()
+        .from(saleLotAllocations)
+        .where(eq(saleLotAllocations.saleId, saleId));
+      for (const allocation of allocations) {
+        await tx
+          .update(productLots)
+          .set({
+            quantity: sql`${productLots.quantity} + ${allocation.quantity}`,
+            updatedAt: new Date(),
+          })
+          .where(eq(productLots.id, allocation.lotId));
+      }
 
       for (const item of items) {
         const product = productById.get(item.productId);

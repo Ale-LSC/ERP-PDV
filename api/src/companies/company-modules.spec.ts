@@ -1,4 +1,7 @@
-import { defaultModulesForSegment } from './company-modules';
+import {
+  defaultModulesForSegment,
+  missingModuleDependencies,
+} from './company-modules';
 
 describe('defaultModulesForSegment', () => {
   it.each(['market', 'industry', 'retail', 'services', 'other'] as const)(
@@ -42,5 +45,20 @@ describe('defaultModulesForSegment', () => {
     expect(defaultModulesForSegment('other')).not.toEqual(
       expect.arrayContaining(['production', 'service_orders', 'pdv']),
     );
+  });
+});
+
+describe('missingModuleDependencies', () => {
+  it('accepts complete operational module sets', () => {
+    expect(
+      missingModuleDependencies(['products', 'cash', 'pdv', 'promotions']),
+    ).toEqual([]);
+  });
+
+  it('reports every missing dependency', () => {
+    expect(missingModuleDependencies(['production'])).toEqual([
+      { module: 'production', dependency: 'bom' },
+      { module: 'production', dependency: 'inventory' },
+    ]);
   });
 });

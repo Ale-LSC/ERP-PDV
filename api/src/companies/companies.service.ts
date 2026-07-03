@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -24,7 +25,10 @@ import { AddCompanyMemberDto } from './dto/add-company-member.dto';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { OnboardCompanyDto } from './dto/onboard-company.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
-import { defaultModulesForSegment } from './company-modules';
+import {
+  defaultModulesForSegment,
+  missingModuleDependencies,
+} from './company-modules';
 
 @Injectable()
 export class CompaniesService {
@@ -558,6 +562,15 @@ export class CompaniesService {
     modules: CompanyModule[],
   ) {
     await this.assertRole(companyId, userId, ['owner', 'admin']);
+    const missingDependencies = missingModuleDependencies(modules);
+    if (missingDependencies.length) {
+      const missing = missingDependencies
+        .map(({ module, dependency }) => `${module} requer ${dependency}`)
+        .join(', ');
+      throw new BadRequestException(
+        `Dependências de módulos inválidas: ${missing}`,
+      );
+    }
     await db.transaction(async (tx) => {
       await tx
         .delete(companyEnabledModules)

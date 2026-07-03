@@ -5,6 +5,7 @@ import {
   index,
   numeric,
   pgTable,
+  primaryKey,
   timestamp,
   uniqueIndex,
   uuid,
@@ -14,6 +15,7 @@ import { sql } from 'drizzle-orm';
 import { branches } from './branches.schema';
 import { companies } from './companies.schema';
 import { products } from './products.schema';
+import { sales } from './sales.schema';
 
 export const promotions = pgTable(
   'promotions',
@@ -78,5 +80,22 @@ export const productLots = pgTable(
       table.expiresAt,
     ),
     check('product_lots_quantity_nonnegative', sql`${table.quantity} >= 0`),
+  ],
+);
+
+export const saleLotAllocations = pgTable(
+  'sale_lot_allocations',
+  {
+    saleId: uuid('sale_id')
+      .notNull()
+      .references(() => sales.id, { onDelete: 'cascade' }),
+    lotId: uuid('lot_id')
+      .notNull()
+      .references(() => productLots.id, { onDelete: 'restrict' }),
+    quantity: numeric('quantity', { precision: 14, scale: 3 }).notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.saleId, table.lotId] }),
+    check('sale_lot_allocation_quantity_positive', sql`${table.quantity} > 0`),
   ],
 );

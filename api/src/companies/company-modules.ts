@@ -43,3 +43,26 @@ export const segmentModuleDefaults = {
 export function defaultModulesForSegment(segment: CompanySegment) {
   return [...segmentModuleDefaults[segment]];
 }
+
+const moduleDependencies: Partial<
+  Record<CompanyModule, readonly CompanyModule[]>
+> = {
+  pdv: ['products', 'cash'],
+  promotions: ['products', 'pdv'],
+  expiry_control: ['products', 'inventory'],
+  bom: ['products', 'inventory'],
+  production: ['bom', 'inventory'],
+  mrp: ['bom', 'inventory'],
+  quality: ['production'],
+  service_orders: ['customers', 'finance'],
+  contracts: ['customers', 'finance'],
+};
+
+export function missingModuleDependencies(modules: readonly CompanyModule[]) {
+  const enabled = new Set(modules);
+  return modules.flatMap((module) =>
+    (moduleDependencies[module] ?? [])
+      .filter((dependency) => !enabled.has(dependency))
+      .map((dependency) => ({ module, dependency })),
+  );
+}

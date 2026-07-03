@@ -104,6 +104,22 @@ export function Services({
       );
     }
   }
+  async function generateBilling() {
+    const through = new Date().toISOString().slice(0, 10);
+    try {
+      const result = await api<{ generated: number }>(
+        `/companies/${companyId}/service-contracts/generate-billing?through=${through}`,
+        { method: "POST" },
+        token,
+      );
+      setFeedback(`${result.generated} cobrança(s) gerada(s).`);
+      await load();
+    } catch (error) {
+      setFeedback(
+        error instanceof Error ? error.message : "Erro ao gerar cobranças.",
+      );
+    }
+  }
   const title =
     module === "service_orders"
       ? "Ordens de serviço"
@@ -124,6 +140,11 @@ export function Services({
                 : "Gerencie vigência e recorrência comercial."}
           </p>
         </div>
+        {module === "contracts" && (
+          <button className="primary" onClick={() => void generateBilling()}>
+            Gerar cobranças vencidas
+          </button>
+        )}
       </section>
       {feedback && <div className="alert success">{feedback}</div>}
       <section className="panel">

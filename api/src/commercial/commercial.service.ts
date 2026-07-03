@@ -4,12 +4,13 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { and, asc, eq, gt, lt } from 'drizzle-orm';
+import { and, asc, eq, gt, lt, sql } from 'drizzle-orm';
 import { BranchesService } from '../branches/branches.service';
 import { CompaniesService } from '../companies/companies.service';
 import { db } from '../database/drizzle';
 import { productLots, promotions } from '../database/schema/commercial.schema';
 import { products } from '../database/schema/products.schema';
+import { branchStocks } from '../database/schema/stock.schema';
 import { CreateProductLotDto } from './dto/create-product-lot.dto';
 import { CreatePromotionDto } from './dto/create-promotion.dto';
 
@@ -115,6 +116,36 @@ export class CommercialService {
       requestedBranchId,
     );
     await this.assertProduct(companyId, dto.productId);
+    const [[stock], [allocation]] = await Promise.all([
+      db
+        .select({ quantity: branchStocks.quantity })
+        .from(branchStocks)
+        .where(
+          and(
+            eq(branchStocks.branchId, branchId),
+            eq(branchStocks.productId, dto.productId),
+          ),
+        ),
+      db
+        .select({
+          quantity: sql<string>`coalesce(sum(${productLots.quantity}), 0)`,
+        })
+        .from(productLots)
+        .where(
+          and(
+            eq(productLots.branchId, branchId),
+            eq(productLots.productId, dto.productId),
+          ),
+        ),
+    ]);
+    if (
+      Number(allocation?.quantity ?? 0) + dto.quantity >
+      Number(stock?.quantity ?? 0)
+    ) {
+      throw new BadRequestException(
+        'A quantidade dos lotes não pode superar o saldo da filial',
+      );
+    }
     try {
       const [lot] = await db
         .insert(productLots)

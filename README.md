@@ -48,6 +48,9 @@ por dono ou administrador na seção **Funcionários**.
 pnpm build
 pnpm lint
 pnpm test
+pnpm test:e2e
+pnpm db:seed
+pnpm db:backup
 ```
 
 ## Endpoints atuais
@@ -139,15 +142,19 @@ Proprietários e administradores podem alterar os módulos pela tela
 **Configuração**. A API também valida o módulo em cada rota operacional; ocultar
 o menu não é usado como mecanismo de segurança.
 
-Os módulos especializados usam `module_records` para registrar atividades com
-título, descrição, prazo e status. Essa base atende promoções, fiscal, validade,
-produção, ficha técnica, MRP, qualidade, ordens de serviço, agenda e contratos,
-mantendo os dados isolados por empresa e módulo.
+Os módulos fiscal e qualidade usam `module_records` para registrar atividades
+com título, descrição, prazo e status. Os demais módulos possuem estruturas de
+negócio específicas, mantendo os dados isolados por empresa e módulo.
 
 Produção possui fichas técnicas, cálculo MRP por filial e ordens que movimentam
 insumos e produtos acabados de forma transacional. Para empresas de serviços,
 ordens concluídas geram contas a receber, a agenda impede choque de horários e
 contratos armazenam vigência, valor e ciclo de cobrança.
+
+Vendas com lotes cadastrados consomem o saldo por FEFO (primeiro a vencer), não
+usam lotes vencidos e restauram as alocações ao cancelar. Contratos ativos geram
+contas a receber recorrentes sem repetir períodos já processados. Operações de
+escrita são registradas em `audit_logs`.
 
 O operador do PDV pode solicitar reposição de itens com estoque baixo. A equipe
 de estoque acompanha e marca cada solicitação como atendida.
@@ -206,4 +213,31 @@ Antes de publicar uma versão:
 pnpm install --frozen-lockfile
 pnpm --filter api db:migrate
 pnpm check
+pnpm test:e2e
 ```
+
+## Dados demonstrativos
+
+Em ambiente local, `pnpm db:seed` cria dados idempotentes para avaliação:
+
+- usuário: `demo@erp.local`
+- senha: `Demo1234!`
+
+O comando é bloqueado quando `NODE_ENV=production`.
+
+## Execução em produção
+
+Defina senhas próprias e inicie a composição de produção:
+
+```bash
+export POSTGRES_PASSWORD='uma-senha-forte'
+export JWT_SECRET='um-segredo-aleatorio-com-mais-de-32-caracteres'
+export APP_ORIGIN='https://erp.exemplo.com'
+docker compose -f docker-compose.prod.yml up -d --build --wait
+```
+
+A API aplica as migrações antes de iniciar. O Nginx publica o frontend e
+encaminha `/api` para a API. O health check externo fica em `/api/health`.
+
+Este MVP não emite NF-e ou NFC-e. Operação fiscal real exige certificado
+digital, credenciamento e homologação com a SEFAZ ou um provedor fiscal.

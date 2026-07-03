@@ -6,6 +6,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -83,6 +84,19 @@ export class ServicesController {
     @Req() r: AuthenticatedRequest,
   ) {
     return this.service.listContracts(c, r.user.sub);
+  }
+  @Post('service-contracts/generate-billing')
+  @RequireCompanyModule('contracts')
+  generateBilling(
+    @Param('companyId', ParseUUIDPipe) companyId: string,
+    @Req() request: AuthenticatedRequest,
+    @Query('through') through: string,
+  ) {
+    return this.service.generateContractBilling(
+      companyId,
+      request.user.sub,
+      through,
+    );
   }
   @Patch('service-contracts/:id/status')
   @RequireCompanyModule('contracts')

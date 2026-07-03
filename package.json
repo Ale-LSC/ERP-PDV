@@ -8,6 +8,9 @@
     "check": "pnpm lint && pnpm test && pnpm build",
     "format": "pnpm --filter api format && pnpm --filter web exec prettier --write src",
     "lint": "pnpm --recursive lint",
-    "test": "pnpm --filter api test"
+    "test": "pnpm --filter api test",
+    "test:e2e": "pnpm --filter api test:e2e",
+    "db:seed": "pnpm --filter api db:seed",
+    "db:backup": "pnpm --filter api db:backup"
   }
 }
