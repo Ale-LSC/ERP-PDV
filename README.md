@@ -216,6 +216,10 @@ pnpm check
 pnpm test:e2e
 ```
 
+Pushes e pull requests são validados automaticamente pelo pipeline em
+`.github/workflows/ci.yml`. O checklist completo de infraestrutura, validação
+funcional, backup e monitoramento está em [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
 ## Dados demonstrativos
 
 Em ambiente local, `pnpm db:seed` cria dados idempotentes para avaliação:

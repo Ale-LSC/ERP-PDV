@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "feat/**", "fix/**"]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: erp_pdv_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d erp_pdv_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/erp_pdv_test
+      JWT_SECRET: ci-only-secret-with-at-least-32-characters
+      CORS_ORIGIN: http://localhost:5173
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.5.2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate production compose file
+        env:
+          POSTGRES_PASSWORD: ci-compose-password
+          JWT_SECRET: ci-compose-secret-with-at-least-32-characters
+        run: docker compose -f docker-compose.prod.yml config --quiet
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Unit tests
+        run: pnpm --filter api exec jest --runInBand
+
+      - name: Build
+        run: pnpm build
+
+      - name: Apply database migrations
+        run: pnpm --filter api db:migrate
+
+      - name: End-to-end tests
+        run: pnpm --filter api exec jest --config ./test/jest-e2e.json --runInBand
