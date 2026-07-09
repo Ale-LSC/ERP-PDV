@@ -23,6 +23,7 @@ import { CommercialModule } from './commercial/commercial.module';
 import { ProductionModule } from './production/production.module';
 import { ServicesModule } from './services/services.module';
 import { AuditModule } from './audit/audit.module';
+import { PaymentsModule } from './payments/payments.module';
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { AuditModule } from './audit/audit.module';
     CommercialModule,
     ProductionModule,
     ServicesModule,
+    PaymentsModule,
     AuditModule,
   ],
   controllers: [AppController],

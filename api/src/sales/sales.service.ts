@@ -19,6 +19,7 @@ import {
   salePayments,
   sales,
 } from '../database/schema/sales.schema';
+import { paymentTransactions } from '../database/schema/payments.schema';
 import { branchStocks, stockMovements } from '../database/schema/stock.schema';
 import { CreateSaleDto, PaymentMethod } from './dto/create-sale.dto';
 import { BranchesService } from '../branches/branches.service';
@@ -232,10 +233,27 @@ export class SalesService {
           total: centsToDecimal(totals.itemTotals[index]),
         })),
       );
-      await tx.insert(salePayments).values(
-        calculatedPayments.map((payment) => ({
+      const createdPayments = await tx
+        .insert(salePayments)
+        .values(
+          calculatedPayments.map((payment) => ({
+            saleId: sale.id,
+            ...payment,
+          })),
+        )
+        .returning();
+      await tx.insert(paymentTransactions).values(
+        createdPayments.map((payment) => ({
+          companyId,
           saleId: sale.id,
-          ...payment,
+          salePaymentId: payment.id,
+          provider: 'manual',
+          status: 'manual' as const,
+          amount: payment.amount,
+          providerPayload: {
+            mode: 'manual_registry',
+            method: payment.method,
+          },
         })),
       );
 
