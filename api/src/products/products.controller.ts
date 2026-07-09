@@ -12,11 +12,14 @@ import {
 } from '@nestjs/common';
 import type { AuthenticatedRequest } from '../auth/auth.types';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CompanyModuleGuard } from '../companies/company-module.guard';
+import { RequireCompanyModule } from '../companies/require-company-module.decorator';
 import { CreateProductDto } from './dto/create-product.dto';
 import { ProductsService } from './products.service';
 import { UpdateProductDto } from './dto/update-product.dto';
 
-@UseGuards(JwtAuthGuard)
+@RequireCompanyModule('products')
+@UseGuards(JwtAuthGuard, CompanyModuleGuard)
 @Controller('companies/:companyId/products')
 export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}

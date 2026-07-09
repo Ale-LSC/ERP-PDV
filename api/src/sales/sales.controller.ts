@@ -11,10 +11,13 @@ import {
 } from '@nestjs/common';
 import type { AuthenticatedRequest } from '../auth/auth.types';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CompanyModuleGuard } from '../companies/company-module.guard';
+import { RequireCompanyModule } from '../companies/require-company-module.decorator';
 import { CreateSaleDto } from './dto/create-sale.dto';
 import { SalesService } from './sales.service';
 
-@UseGuards(JwtAuthGuard)
+@RequireCompanyModule('pdv')
+@UseGuards(JwtAuthGuard, CompanyModuleGuard)
 @Controller('companies/:companyId/sales')
 export class SalesController {
   constructor(private readonly salesService: SalesService) {}

@@ -107,6 +107,14 @@ export class ProductsService {
         sku: products.sku,
         barcode: products.barcode,
         salePrice: products.salePrice,
+        effectivePrice: sql<string>`coalesce((
+          select p.promotional_price from promotions p
+          where p.company_id = ${companyId}
+            and p.product_id = ${products.id}
+            and p.is_active = true
+            and p.starts_at <= now() and p.ends_at > now()
+          limit 1
+        ), ${products.salePrice})`,
         costPrice: products.costPrice,
         stockQuantity: sql<string>`coalesce(${branchStocks.quantity}, 0)`,
         minimumStock: products.minimumStock,

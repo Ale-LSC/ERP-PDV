@@ -4,17 +4,22 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, gte, inArray, sql } from 'drizzle-orm';
 import { CompaniesService } from '../companies/companies.service';
 import { db } from '../database/drizzle';
 import { cashSessions } from '../database/schema/cash.schema';
 import { products } from '../database/schema/products.schema';
 import { customers } from '../database/schema/customers.schema';
 import {
+  productLots,
+  saleLotAllocations,
+} from '../database/schema/commercial.schema';
+import {
   saleItems,
   salePayments,
   sales,
 } from '../database/schema/sales.schema';
+import { paymentTransactions } from '../database/schema/payments.schema';
 import { branchStocks, stockMovements } from '../database/schema/stock.schema';
 import { CreateSaleDto, PaymentMethod } from './dto/create-sale.dto';
 import { BranchesService } from '../branches/branches.service';
@@ -24,6 +29,7 @@ import {
   centsToDecimal,
   toCents,
 } from './sale-calculation';
+import { allocateLotsFefo } from '../commercial/lot-allocation';
 
 @Injectable()
 export class SalesService {
@@ -78,7 +84,14 @@ export class SalesService {
           id: products.id,
           name: products.name,
           sku: products.sku,
-          salePrice: products.salePrice,
+          salePrice: sql<string>`coalesce((
+            select p.promotional_price from promotions p
+            where p.company_id = ${companyId}
+              and p.product_id = ${products.id}
+              and p.is_active = true
+              and p.starts_at <= now() and p.ends_at > now()
+            limit 1
+          ), ${products.salePrice})`,
           stockQuantity: branchStocks.quantity,
         })
         .from(products)
@@ -119,6 +132,35 @@ export class SalesService {
 
         return { product, quantity: item.quantity };
       });
+      const lotAllocations: Array<{ id: string; quantity: number }> = [];
+      const today = new Date().toISOString().slice(0, 10);
+      for (const { product, quantity } of calculatedItems) {
+        const lots = await tx
+          .select({
+            id: productLots.id,
+            quantity: productLots.quantity,
+            expiresAt: productLots.expiresAt,
+          })
+          .from(productLots)
+          .where(
+            and(
+              eq(productLots.branchId, cashSession.branchId),
+              eq(productLots.productId, product.id),
+              gt(productLots.quantity, '0'),
+            ),
+          )
+          .orderBy(asc(productLots.expiresAt))
+          .for('update');
+        if (!lots.length) continue;
+
+        try {
+          lotAllocations.push(...allocateLotsFefo(lots, quantity, today));
+        } catch {
+          throw new BadRequestException(
+            `Lotes válidos insuficientes: ${product.name}`,
+          );
+        }
+      }
       const totals = calculateSaleTotals(
         calculatedItems.map(({ product, quantity }) => ({
           unitPrice: product.salePrice,
@@ -191,12 +233,54 @@ export class SalesService {
           total: centsToDecimal(totals.itemTotals[index]),
         })),
       );
-      await tx.insert(salePayments).values(
-        calculatedPayments.map((payment) => ({
+      const createdPayments = await tx
+        .insert(salePayments)
+        .values(
+          calculatedPayments.map((payment) => ({
+            saleId: sale.id,
+            ...payment,
+          })),
+        )
+        .returning();
+      await tx.insert(paymentTransactions).values(
+        createdPayments.map((payment) => ({
+          companyId,
           saleId: sale.id,
-          ...payment,
+          salePaymentId: payment.id,
+          provider: 'manual',
+          status: 'manual' as const,
+          amount: payment.amount,
+          providerPayload: {
+            mode: 'manual_registry',
+            method: payment.method,
+          },
         })),
       );
+
+      if (lotAllocations.length) {
+        await tx.insert(saleLotAllocations).values(
+          lotAllocations.map((allocation) => ({
+            saleId: sale.id,
+            lotId: allocation.id,
+            quantity: allocation.quantity.toFixed(3),
+          })),
+        );
+      }
+
+      for (const allocation of lotAllocations) {
+        await tx
+          .update(productLots)
+          .set({
+            quantity: sql`${productLots.quantity} - ${allocation.quantity}`,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(productLots.id, allocation.id),
+              gte(productLots.quantity, allocation.quantity.toString()),
+            ),
+          );
+      }
 
       for (const { product, quantity } of calculatedItems) {
         const previousQuantity = Number(product.stockQuantity);
@@ -298,6 +382,20 @@ export class SalesService {
       const productById = new Map(
         selectedProducts.map((product) => [product.id, product]),
       );
+
+      const allocations = await tx
+        .select()
+        .from(saleLotAllocations)
+        .where(eq(saleLotAllocations.saleId, saleId));
+      for (const allocation of allocations) {
+        await tx
+          .update(productLots)
+          .set({
+            quantity: sql`${productLots.quantity} + ${allocation.quantity}`,
+            updatedAt: new Date(),
+          })
+          .where(eq(productLots.id, allocation.lotId));
+      }
 
       for (const item of items) {
         const product = productById.get(item.productId);

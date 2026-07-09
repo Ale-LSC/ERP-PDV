@@ -11,11 +11,14 @@ import {
 } from '@nestjs/common';
 import type { AuthenticatedRequest } from '../auth/auth.types';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CompanyModuleGuard } from '../companies/company-module.guard';
+import { RequireCompanyModule } from '../companies/require-company-module.decorator';
 import { CashService } from './cash.service';
 import { CloseCashSessionDto } from './dto/close-cash-session.dto';
 import { OpenCashSessionDto } from './dto/open-cash-session.dto';
 
-@UseGuards(JwtAuthGuard)
+@RequireCompanyModule('cash')
+@UseGuards(JwtAuthGuard, CompanyModuleGuard)
 @Controller('companies/:companyId/cash-sessions')
 export class CashController {
   constructor(private readonly cashService: CashService) {}
